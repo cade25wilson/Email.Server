@@ -59,9 +59,12 @@ builder.Services.AddAuthentication(options =>
 // Configure CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowReactApp", policy =>
+    options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("https://localhost:59592", "http://localhost:5173")
+        policy.WithOrigins(
+                "https://localhost:59592",
+                "http://localhost:5173",
+                "https://polite-mud-06a30121e.3.azurestaticapps.net") // Azure Static Web App
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -87,7 +90,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseCors("AllowReactApp");
+app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
