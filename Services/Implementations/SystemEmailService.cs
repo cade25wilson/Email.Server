@@ -11,11 +11,12 @@ public class SystemEmailService : ISystemEmailService
     private readonly ILogger<SystemEmailService> _logger;
 
     public SystemEmailService(
-        IAmazonSimpleEmailServiceV2 sesClient,
+        ISesClientFactory sesClientFactory,
         IConfiguration configuration,
         ILogger<SystemEmailService> logger)
     {
-        _sesClient = sesClient;
+        var region = configuration["AWS:Region"] ?? "us-east-1";
+        _sesClient = sesClientFactory.CreateClient(region);
         _configuration = configuration;
         _logger = logger;
     }
@@ -28,7 +29,8 @@ public class SystemEmailService : ISystemEmailService
         var baseUrl = _configuration["SystemEmail:BaseUrl"]
             ?? throw new InvalidOperationException("SystemEmail:BaseUrl is not configured");
 
-        var verificationLink = $"{baseUrl}/verify-email?userId={userId}&token={Uri.EscapeDataString(verificationToken)}";
+        var apiBaseUrl = _configuration["SystemEmail:ApiBaseUrl"] ?? baseUrl;
+        var verificationLink = $"{apiBaseUrl}/api/auth/verify-email?userId={userId}&token={Uri.EscapeDataString(verificationToken)}";
 
         var htmlBody = $@"
 <!DOCTYPE html>

@@ -7,19 +7,14 @@ namespace Email.Server.Controllers;
 
 [ApiController]
 [Route("api/v1/[controller]")]
-[Authorize]
-public class EmailsController : ControllerBase
+[Authorize(AuthenticationSchemes = "ApiKey")]
+public class EmailsController(IEmailSendingService emailService, ILogger<EmailsController> logger) : ControllerBase
 {
-    private readonly IEmailSendingService _emailService;
-    private readonly ILogger<EmailsController> _logger;
-
-    public EmailsController(IEmailSendingService emailService, ILogger<EmailsController> logger)
-    {
-        _emailService = emailService;
-        _logger = logger;
-    }
+    private readonly IEmailSendingService _emailService = emailService;
+    private readonly ILogger<EmailsController> _logger = logger;
 
     [HttpPost("send")]
+    [Authorize(Policy = "emails:send")]
     public async Task<IActionResult> SendEmail([FromBody] SendEmailRequest request, CancellationToken cancellationToken)
     {
         try

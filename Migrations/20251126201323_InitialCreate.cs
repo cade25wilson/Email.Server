@@ -72,7 +72,7 @@ namespace Email.Server.Migrations
                 name: "Tenants",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
                     Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     Status = table.Column<byte>(type: "tinyint", nullable: false),
                     CreatedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false)
@@ -189,34 +189,10 @@ namespace Email.Server.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "ApiKeys",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
-                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    KeyPrefix = table.Column<string>(type: "nvarchar(8)", maxLength: 8, nullable: false),
-                    KeyHash = table.Column<byte[]>(type: "varbinary(64)", maxLength: 64, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    LastUsedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    IsRevoked = table.Column<bool>(type: "bit", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ApiKeys", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ApiKeys_Tenants_TenantId",
-                        column: x => x.TenantId,
-                        principalTable: "Tenants",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Domains",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
                     TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Region = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
                     Domain = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
@@ -249,7 +225,7 @@ namespace Email.Server.Migrations
                 name: "InboundMessages",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
                     TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Region = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
                     Recipient = table.Column<string>(type: "nvarchar(320)", maxLength: 320, nullable: false),
@@ -278,7 +254,7 @@ namespace Email.Server.Migrations
                 name: "SesRegions",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
                     TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Region = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
                     EventBusArn = table.Column<string>(type: "nvarchar(2048)", maxLength: 2048, nullable: true),
@@ -337,7 +313,7 @@ namespace Email.Server.Migrations
                 name: "Templates",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
                     TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     Version = table.Column<int>(type: "int", nullable: false),
@@ -387,7 +363,7 @@ namespace Email.Server.Migrations
                 name: "WebhookEndpoints",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
                     TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Url = table.Column<string>(type: "nvarchar(2048)", maxLength: 2048, nullable: false),
                     Secret = table.Column<byte[]>(type: "varbinary(64)", maxLength: 64, nullable: true),
@@ -399,6 +375,37 @@ namespace Email.Server.Migrations
                     table.PrimaryKey("PK_WebhookEndpoints", x => x.Id);
                     table.ForeignKey(
                         name: "FK_WebhookEndpoints_Tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalTable: "Tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ApiKeys",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
+                    TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    DomainId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    KeyPrefix = table.Column<string>(type: "nvarchar(8)", maxLength: 8, nullable: false),
+                    KeyHash = table.Column<byte[]>(type: "varbinary(64)", maxLength: 64, nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    LastUsedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsRevoked = table.Column<bool>(type: "bit", nullable: false),
+                    Scopes = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ApiKeys", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ApiKeys_Domains_DomainId",
+                        column: x => x.DomainId,
+                        principalTable: "Domains",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_ApiKeys_Tenants_TenantId",
                         column: x => x.TenantId,
                         principalTable: "Tenants",
                         principalColumn: "Id",
@@ -434,7 +441,7 @@ namespace Email.Server.Migrations
                 name: "Senders",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
                     DomainId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Email = table.Column<string>(type: "nvarchar(320)", maxLength: 320, nullable: false),
                     DisplayName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
@@ -455,7 +462,7 @@ namespace Email.Server.Migrations
                 name: "ConfigSets",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
                     SesRegionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Name = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
                     ConfigSetName = table.Column<string>(type: "nvarchar(255)", maxLength: 255, nullable: false),
@@ -477,17 +484,20 @@ namespace Email.Server.Migrations
                 name: "Messages",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWID()"),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "NEWSEQUENTIALID()"),
                     TenantId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Region = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
                     ConfigSetId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     FromEmail = table.Column<string>(type: "nvarchar(320)", maxLength: 320, nullable: false),
                     FromName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
                     Subject = table.Column<string>(type: "nvarchar(998)", maxLength: 998, nullable: true),
+                    HtmlBody = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    TextBody = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     TemplateId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     SesMessageId = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
                     Status = table.Column<byte>(type: "tinyint", nullable: false),
                     RequestedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ScheduledAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
                     SentAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
                     Error = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
@@ -622,11 +632,16 @@ namespace Email.Server.Migrations
                 columns: new[] { "Region", "CreatedAtUtc", "DefaultForNewTenants", "DisplayName", "ReceiveSupported", "SendSupported" },
                 values: new object[,]
                 {
-                    { "ap-southeast-2", new DateTime(2025, 11, 24, 20, 15, 9, 6, DateTimeKind.Utc).AddTicks(5174), false, "APAC (Sydney)", true, true },
-                    { "eu-west-1", new DateTime(2025, 11, 24, 20, 15, 9, 6, DateTimeKind.Utc).AddTicks(5173), false, "EU (Ireland)", true, true },
-                    { "us-east-1", new DateTime(2025, 11, 24, 20, 15, 9, 6, DateTimeKind.Utc).AddTicks(5168), true, "US East (N. Virginia)", true, true },
-                    { "us-west-2", new DateTime(2025, 11, 24, 20, 15, 9, 6, DateTimeKind.Utc).AddTicks(5171), false, "US West (Oregon)", true, true }
+                    { "ap-southeast-2", new DateTime(2025, 11, 26, 20, 13, 21, 75, DateTimeKind.Utc).AddTicks(1949), false, "APAC (Sydney)", true, true },
+                    { "eu-west-1", new DateTime(2025, 11, 26, 20, 13, 21, 75, DateTimeKind.Utc).AddTicks(1947), false, "EU (Ireland)", true, true },
+                    { "us-east-1", new DateTime(2025, 11, 26, 20, 13, 21, 74, DateTimeKind.Utc).AddTicks(8988), false, "US East (N. Virginia)", true, true },
+                    { "us-west-2", new DateTime(2025, 11, 26, 20, 13, 21, 75, DateTimeKind.Utc).AddTicks(1944), true, "US West (Oregon)", true, true }
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_ApiKeys_Domain",
+                table: "ApiKeys",
+                column: "DomainId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ApiKeys_Tenant",

@@ -7,13 +7,13 @@ namespace Email.Server.Controllers;
 
 [ApiController]
 [Route("api/v1/[controller]")]
-[Authorize]
 public class DomainsController(IDomainManagementService domainService, ILogger<DomainsController> logger) : ControllerBase
 {
     private readonly IDomainManagementService _domainService = domainService;
     private readonly ILogger<DomainsController> _logger = logger;
 
     [HttpPost]
+    [Authorize(Policy = "domains:write")]
     public async Task<IActionResult> CreateDomain([FromBody] CreateDomainRequest request, CancellationToken cancellationToken)
     {
         try
@@ -33,6 +33,7 @@ public class DomainsController(IDomainManagementService domainService, ILogger<D
     }
 
     [HttpGet]
+    [Authorize(Policy = "domains:read")]
     public async Task<IActionResult> GetDomains(CancellationToken cancellationToken)
     {
         try
@@ -48,6 +49,7 @@ public class DomainsController(IDomainManagementService domainService, ILogger<D
     }
 
     [HttpGet("{id}")]
+    [Authorize(Policy = "domains:read")]
     public async Task<IActionResult> GetDomain(Guid id, CancellationToken cancellationToken)
     {
         try
@@ -67,6 +69,7 @@ public class DomainsController(IDomainManagementService domainService, ILogger<D
     }
 
     [HttpGet("{id}/verify")]
+    [Authorize(Policy = "domains:write")]
     public async Task<IActionResult> VerifyDomain(Guid id, CancellationToken cancellationToken)
     {
         try
@@ -86,6 +89,7 @@ public class DomainsController(IDomainManagementService domainService, ILogger<D
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Policy = "domains:delete")]
     public async Task<IActionResult> DeleteDomain(Guid id, CancellationToken cancellationToken)
     {
         try

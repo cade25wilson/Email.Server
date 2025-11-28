@@ -14,6 +14,7 @@ public interface ISesClientService
     // AWS SES Tenant Management
     Task<CreateTenantResponse> CreateSesTenantAsync(string tenantName, CancellationToken cancellationToken = default);
     Task<CreateTenantResourceAssociationResponse> AssociateResourceToTenantAsync(string tenantName, string resourceArn, CancellationToken cancellationToken = default);
+    Task DisassociateResourceFromTenantAsync(string tenantName, string resourceArn, CancellationToken cancellationToken = default);
     Task<DeleteTenantResponse> DeleteSesTenantAsync(string tenantName, CancellationToken cancellationToken = default);
 
     /// <summary>

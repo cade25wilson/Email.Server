@@ -27,14 +27,20 @@ public class Messages
     [MaxLength(998)]
     public string? Subject { get; set; }
 
+    public string? HtmlBody { get; set; }
+
+    public string? TextBody { get; set; }
+
     public Guid? TemplateId { get; set; }
 
     [MaxLength(256)]
     public string? SesMessageId { get; set; }
 
-    public byte Status { get; set; } = 0; // 0=Queued,1=Sent,2=Failed,3=Partial
+    public byte Status { get; set; } = 0; // 0=Queued,1=Sent,2=Failed,3=Partial,4=Scheduled
 
     public DateTime RequestedAtUtc { get; set; } = DateTime.UtcNow;
+
+    public DateTime? ScheduledAtUtc { get; set; }
 
     public DateTime? SentAtUtc { get; set; }
 

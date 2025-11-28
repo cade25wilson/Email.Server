@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Email.Server.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251124201509_InitialCreate")]
+    [Migration("20251126201323_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -20,7 +20,7 @@ namespace Email.Server.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.14")
+                .HasAnnotation("ProductVersion", "10.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -95,10 +95,13 @@ namespace Email.Server.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWID()");
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<Guid>("DomainId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsRevoked")
                         .HasColumnType("bit");
@@ -121,10 +124,18 @@ namespace Email.Server.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("Scopes")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DomainId")
+                        .HasDatabaseName("IX_ApiKeys_Domain");
 
                     b.HasIndex("KeyPrefix")
                         .IsUnique()
@@ -141,7 +152,7 @@ namespace Email.Server.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWID()");
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<string>("ConfigSetName")
                         .IsRequired()
@@ -220,7 +231,7 @@ namespace Email.Server.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWID()");
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -280,7 +291,7 @@ namespace Email.Server.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWID()");
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<string>("FromAddress")
                         .IsRequired()
@@ -437,7 +448,7 @@ namespace Email.Server.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWID()");
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<Guid?>("ConfigSetId")
                         .HasColumnType("uniqueidentifier");
@@ -454,12 +465,18 @@ namespace Email.Server.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("HtmlBody")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Region")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
                     b.Property<DateTime>("RequestedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ScheduledAtUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("SentAtUtc")
@@ -481,6 +498,9 @@ namespace Email.Server.Migrations
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TextBody")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -528,8 +548,8 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "us-east-1",
-                            CreatedAtUtc = new DateTime(2025, 11, 24, 20, 15, 9, 6, DateTimeKind.Utc).AddTicks(5168),
-                            DefaultForNewTenants = true,
+                            CreatedAtUtc = new DateTime(2025, 11, 26, 20, 13, 21, 74, DateTimeKind.Utc).AddTicks(8988),
+                            DefaultForNewTenants = false,
                             DisplayName = "US East (N. Virginia)",
                             ReceiveSupported = true,
                             SendSupported = true
@@ -537,8 +557,8 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "us-west-2",
-                            CreatedAtUtc = new DateTime(2025, 11, 24, 20, 15, 9, 6, DateTimeKind.Utc).AddTicks(5171),
-                            DefaultForNewTenants = false,
+                            CreatedAtUtc = new DateTime(2025, 11, 26, 20, 13, 21, 75, DateTimeKind.Utc).AddTicks(1944),
+                            DefaultForNewTenants = true,
                             DisplayName = "US West (Oregon)",
                             ReceiveSupported = true,
                             SendSupported = true
@@ -546,7 +566,7 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "eu-west-1",
-                            CreatedAtUtc = new DateTime(2025, 11, 24, 20, 15, 9, 6, DateTimeKind.Utc).AddTicks(5173),
+                            CreatedAtUtc = new DateTime(2025, 11, 26, 20, 13, 21, 75, DateTimeKind.Utc).AddTicks(1947),
                             DefaultForNewTenants = false,
                             DisplayName = "EU (Ireland)",
                             ReceiveSupported = true,
@@ -555,7 +575,7 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "ap-southeast-2",
-                            CreatedAtUtc = new DateTime(2025, 11, 24, 20, 15, 9, 6, DateTimeKind.Utc).AddTicks(5174),
+                            CreatedAtUtc = new DateTime(2025, 11, 26, 20, 13, 21, 75, DateTimeKind.Utc).AddTicks(1949),
                             DefaultForNewTenants = false,
                             DisplayName = "APAC (Sydney)",
                             ReceiveSupported = true,
@@ -568,7 +588,7 @@ namespace Email.Server.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWID()");
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<string>("DisplayName")
                         .HasMaxLength(200)
@@ -599,7 +619,7 @@ namespace Email.Server.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWID()");
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<string>("AwsSesTenantArn")
                         .HasMaxLength(2048)
@@ -710,7 +730,7 @@ namespace Email.Server.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWID()");
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -775,7 +795,7 @@ namespace Email.Server.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWID()");
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -831,7 +851,7 @@ namespace Email.Server.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWID()");
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
@@ -993,11 +1013,19 @@ namespace Email.Server.Migrations
 
             modelBuilder.Entity("Email.Server.Models.ApiKeys", b =>
                 {
+                    b.HasOne("Email.Server.Models.Domains", "Domain")
+                        .WithMany()
+                        .HasForeignKey("DomainId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
                     b.HasOne("Email.Server.Models.Tenants", "Tenant")
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Domain");
 
                     b.Navigation("Tenant");
                 });

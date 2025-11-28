@@ -68,6 +68,9 @@ public class EmailSendingService : IEmailSendingService
             throw new InvalidOperationException($"The following recipients are suppressed: {string.Join(", ", suppressedEmails)}");
         }
 
+        // Determine if this is a scheduled send
+        var isScheduled = request.ScheduledAtUtc.HasValue && request.ScheduledAtUtc.Value > DateTime.UtcNow;
+
         // Create message entity
         var message = new Messages
         {
@@ -77,9 +80,12 @@ public class EmailSendingService : IEmailSendingService
             FromEmail = request.FromEmail,
             FromName = request.FromName,
             Subject = request.Subject,
+            HtmlBody = request.HtmlBody,
+            TextBody = request.TextBody,
             TemplateId = request.TemplateId,
-            Status = 0, // Queued
-            RequestedAtUtc = DateTime.UtcNow
+            Status = isScheduled ? (byte)4 : (byte)0, // 4=Scheduled, 0=Queued
+            RequestedAtUtc = DateTime.UtcNow,
+            ScheduledAtUtc = request.ScheduledAtUtc
         };
 
         _context.Messages.Add(message);
@@ -139,6 +145,25 @@ public class EmailSendingService : IEmailSendingService
                     Value = tag.Value
                 });
             }
+        }
+
+        // If scheduled, save and return - don't send yet
+        if (isScheduled)
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Email scheduled for {ScheduledAtUtc}. MessageId: {MessageId}",
+                request.ScheduledAtUtc, message.Id);
+
+            return new DTOs.Responses.SendEmailResponse
+            {
+                MessageId = message.Id,
+                SesMessageId = null,
+                Status = message.Status,
+                RequestedAtUtc = message.RequestedAtUtc,
+                ScheduledAtUtc = message.ScheduledAtUtc,
+                Error = null
+            };
         }
 
         // Send via SES
@@ -209,6 +234,139 @@ public class EmailSendingService : IEmailSendingService
             SesMessageId = message.SesMessageId,
             Status = message.Status,
             RequestedAtUtc = message.RequestedAtUtc,
+            ScheduledAtUtc = message.ScheduledAtUtc,
+            Error = message.Error
+        };
+    }
+
+    public async Task<DTOs.Responses.SendEmailResponse> SendScheduledMessageAsync(Guid messageId, CancellationToken cancellationToken = default)
+    {
+        // Load the scheduled message with recipients
+        var message = await _context.Messages
+            .Include(m => m.Tenant)
+            .FirstOrDefaultAsync(m => m.Id == messageId && m.Status == 4, cancellationToken);
+
+        if (message == null)
+        {
+            throw new InvalidOperationException($"Scheduled message {messageId} not found or already processed");
+        }
+
+        var recipients = await _context.MessageRecipients
+            .Where(r => r.MessageId == messageId)
+            .ToListAsync(cancellationToken);
+
+        // Get domain info for SES region
+        var fromDomain = message.FromEmail.Split('@')[1];
+        var domain = await _context.Domains
+            .FirstOrDefaultAsync(d => d.TenantId == message.TenantId && d.Domain == fromDomain && d.VerificationStatus == 1, cancellationToken);
+
+        if (domain == null)
+        {
+            message.Status = 2; // Failed
+            message.Error = $"Domain {fromDomain} is no longer verified";
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return new DTOs.Responses.SendEmailResponse
+            {
+                MessageId = message.Id,
+                Status = message.Status,
+                RequestedAtUtc = message.RequestedAtUtc,
+                ScheduledAtUtc = message.ScheduledAtUtc,
+                Error = message.Error
+            };
+        }
+
+        // Get SES region config
+        var sesRegion = await _context.SesRegions
+            .FirstOrDefaultAsync(sr => sr.TenantId == message.TenantId && sr.Region == domain.Region, cancellationToken);
+
+        if (sesRegion == null)
+        {
+            message.Status = 2; // Failed
+            message.Error = $"Region {domain.Region} is not configured for tenant";
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return new DTOs.Responses.SendEmailResponse
+            {
+                MessageId = message.Id,
+                Status = message.Status,
+                RequestedAtUtc = message.RequestedAtUtc,
+                ScheduledAtUtc = message.ScheduledAtUtc,
+                Error = message.Error
+            };
+        }
+
+        // Build and send via SES
+        try
+        {
+            var toRecipients = recipients.Where(r => r.Kind == 0).Select(r => r.Email).ToList();
+            var ccRecipients = recipients.Where(r => r.Kind == 1).Select(r => r.Email).ToList();
+            var bccRecipients = recipients.Where(r => r.Kind == 2).Select(r => r.Email).ToList();
+
+            var sesRequest = new Amazon.SimpleEmailV2.Model.SendEmailRequest
+            {
+                FromEmailAddress = message.FromName != null
+                    ? $"{message.FromName} <{message.FromEmail}>"
+                    : message.FromEmail,
+                Destination = new Destination
+                {
+                    ToAddresses = toRecipients,
+                    CcAddresses = ccRecipients.Count > 0 ? ccRecipients : null,
+                    BccAddresses = bccRecipients.Count > 0 ? bccRecipients : null
+                },
+                Content = new EmailContent
+                {
+                    Simple = new Message
+                    {
+                        Subject = new Content { Data = message.Subject },
+                        Body = new Body
+                        {
+                            Html = message.HtmlBody != null ? new Content { Data = message.HtmlBody } : null,
+                            Text = message.TextBody != null ? new Content { Data = message.TextBody } : null
+                        }
+                    }
+                }
+            };
+
+            if (message.ConfigSetId.HasValue)
+            {
+                var configSet = await _context.ConfigSets.FindAsync(message.ConfigSetId.Value);
+                if (configSet != null)
+                {
+                    sesRequest.ConfigurationSetName = configSet.ConfigSetName;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(sesRegion.AwsSesTenantName))
+            {
+                sesRequest.TenantName = sesRegion.AwsSesTenantName;
+            }
+
+            var sesResponse = await _sesClient.SendEmailAsync(sesRequest, cancellationToken);
+
+            message.SesMessageId = sesResponse.MessageId;
+            message.Status = 1; // Sent
+            message.SentAtUtc = DateTime.UtcNow;
+
+            _logger.LogInformation("Scheduled email sent successfully. MessageId: {MessageId}, SesMessageId: {SesMessageId}",
+                message.Id, sesResponse.MessageId);
+        }
+        catch (Exception ex)
+        {
+            message.Status = 2; // Failed
+            message.Error = ex.Message;
+            _logger.LogError(ex, "Failed to send scheduled email. MessageId: {MessageId}", message.Id);
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        return new DTOs.Responses.SendEmailResponse
+        {
+            MessageId = message.Id,
+            SesMessageId = message.SesMessageId,
+            Status = message.Status,
+            RequestedAtUtc = message.RequestedAtUtc,
+            ScheduledAtUtc = message.ScheduledAtUtc,
             Error = message.Error
         };
     }

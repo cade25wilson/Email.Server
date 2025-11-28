@@ -87,9 +87,8 @@ namespace Email.Server.Services.Implementations
                         continue;
                     }
 
-                    // Create region-specific SES client and service
-                    var sesClient = _sesClientFactory.CreateClient(sesRegion.Region);
-                    var sesService = new SesClientService(sesClient, _loggerFactory.CreateLogger<SesClientService>());
+                    // Create region-specific SES service
+                    var sesService = _sesClientFactory.CreateSesClientService(sesRegion.Region);
 
                     // Retry creating the AWS SES tenant
                     var response = await sesService.CreateSesTenantAsync(sesRegion.AwsSesTenantName!, cancellationToken);

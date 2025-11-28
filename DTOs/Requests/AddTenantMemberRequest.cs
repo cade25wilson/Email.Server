@@ -1,15 +1,17 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using Email.Server.Models;
 
-namespace Email.Server.DTOs.Requests
-{
-    public class AddTenantMemberRequest
-    {
-        [Required]
-        [EmailAddress]
-        public required string UserEmail { get; set; }
+namespace Email.Server.DTOs.Requests;
 
-        [Required]
-        public TenantRole Role { get; set; }
-    }
+public class AddTenantMemberRequest
+{
+    [Required]
+    [EmailAddress]
+    [JsonPropertyName("user_email")]
+    public required string UserEmail { get; set; }
+
+    [Required]
+    [JsonPropertyName("role")]
+    public TenantRole Role { get; set; }
 }

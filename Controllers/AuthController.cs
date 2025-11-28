@@ -4,12 +4,10 @@ using Email.Server.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using System.Web;
 
 namespace Email.Server.Controllers;
 
@@ -209,6 +207,51 @@ public class AuthController(
         {
             _logger.LogError(ex, "Failed to enable sending for user {UserId}'s tenants", user.Id);
             // Don't fail verification if enabling sending fails
+        }
+
+        return Ok(new { message = "Email verified successfully. You can now send emails." });
+    }
+
+    [HttpGet("verify-email")]
+    public async Task<IActionResult> VerifyEmailCallback([FromQuery] string userId, [FromQuery] string token)
+    {
+        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(token))
+        {
+            return BadRequest(new ErrorResponse { Message = "Invalid verification link" });
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+        {
+            return BadRequest(new ErrorResponse { Message = "Invalid verification link" });
+        }
+
+        if (user.EmailConfirmed)
+        {
+            return Ok(new { message = "Email already verified" });
+        }
+
+        var result = await _userManager.ConfirmEmailAsync(user, token);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new ErrorResponse
+            {
+                Message = "Email verification failed. The link may have expired.",
+                Errors = [.. result.Errors.Select(e => e.Description)]
+            });
+        }
+
+        _logger.LogInformation("Email verified for user {Email} via callback", user.Email);
+
+        // Enable sending for user's tenants now that email is verified
+        try
+        {
+            await _tenantManagementService.EnableSendingForUserTenantsAsync(user.Id);
+            _logger.LogInformation("Enabled sending for user {UserId}'s tenants after email verification", user.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to enable sending for user {UserId}'s tenants", user.Id);
         }
 
         return Ok(new { message = "Email verified successfully. You can now send emails." });

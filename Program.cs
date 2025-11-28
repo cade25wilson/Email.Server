@@ -1,9 +1,11 @@
-using Amazon.SimpleEmailV2;
+using Email.Server.Authentication;
 using Email.Server.Data;
+using Email.Server.DTOs.Requests;
 using Email.Server.Mapping;
 using Email.Server.Services.Implementations;
 using Email.Server.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -11,9 +13,11 @@ using Serilog;
 using System.Text;
 
 // Configure Serilog
+var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(new ConfigurationBuilder()
         .AddJsonFile("appsettings.json")
+        .AddJsonFile($"appsettings.{environment}.json", optional: true)
         .Build())
     .CreateLogger();
 
@@ -30,7 +34,7 @@ try
     {
         var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
             ?? throw new InvalidOperationException("DefaultConnection is not configured");
-         options.UseSqlServer(connectionString);
+        options.UseSqlServer(connectionString);
     });
 
     // Configure Identity
@@ -74,7 +78,25 @@ try
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
             ClockSkew = TimeSpan.Zero
         };
-    });
+    })
+    .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
+        ApiKeyAuthenticationHandler.SchemeName, null);
+
+    // Configure Authorization with scope-based policies
+    builder.Services.AddAuthorizationBuilder()
+        .AddPolicy(ApiKeyScopes.EmailsSend, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.EmailsSend)))
+        .AddPolicy(ApiKeyScopes.DomainsRead, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.DomainsRead)))
+        .AddPolicy(ApiKeyScopes.DomainsWrite, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.DomainsWrite)))
+        .AddPolicy(ApiKeyScopes.DomainsDelete, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.DomainsDelete)))
+        .AddPolicy(ApiKeyScopes.MessagesRead, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.MessagesRead)));
+
+    // Register authorization handler
+    builder.Services.AddSingleton<IAuthorizationHandler, ApiKeyScopeHandler>();
 
     // Configure CORS
     builder.Services.AddCors(options =>
@@ -82,7 +104,8 @@ try
         options.AddPolicy("AllowFrontend", policy =>
         {
             policy.WithOrigins(
-                    "https://localhost:59592",
+                    "https://localhost:" +
+                    "59592",
                     "http://localhost:5173",
                     "https://localhost:59594",
                     "https://localhost:59593",
@@ -93,12 +116,12 @@ try
         });
     });
 
-    // Configure AWS SES
-    builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
-    builder.Services.AddAWSService<IAmazonSimpleEmailServiceV2>();
-
     // Configure AutoMapper
-    builder.Services.AddAutoMapper(typeof(AutoMapperProfile));
+    builder.Services.AddAutoMapper(cfg =>
+    {
+        cfg.LicenseKey = "eyJhbGciOiJSUzI1NiIsImtpZCI6Ikx1Y2t5UGVubnlTb2Z0d2FyZUxpY2Vuc2VLZXkvYmJiMTNhY2I1OTkwNGQ4OWI0Y2IxYzg1ZjA4OGNjZjkiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2x1Y2t5cGVubnlzb2Z0d2FyZS5jb20iLCJhdWQiOiJMdWNreVBlbm55U29mdHdhcmUiLCJleHAiOiIxNzk1NjUxMjAwIiwiaWF0IjoiMTc2NDE4NTc0OSIsImFjY291bnRfaWQiOiIwMTlhYzFhOTg1MjM3YmFmYWE1YjM5ZGQ2MTFlZjVmNCIsImN1c3RvbWVyX2lkIjoiY3RtXzAxa2IwdG1lNm1rNDYxdDRuZXNlYzhuODZoIiwic3ViX2lkIjoiLSIsImVkaXRpb24iOiIwIiwidHlwZSI6IjIifQ.n0I9BbgcgWWokf5JSvqOocYSx92ls7BhS5kf5HOfCFbu2YMVjoscakiI1NNARIJPgozFgdfDNSs5uXj9DNSE4tTrBmkatRQ7rnj4OtAZehuwAdUefvK8S-MVh61XIxDr6cMkSNqTVj3iilMyeeoVhkHYYMSVKkc5ArI88YhIWWY-ZWmDReYECwG9k9GPTu418zxLc5NHqoXfRGpxIm67MWNmEy425Ru0Q4VcFYZQPUjN7setwVVRLPBh3uxsDVzPY5ErWa9OayOPsQ7AFzGpTnedbN0unfZ_89b-13hg4moTay3gTyIv3JnJl6g6xtOifffRdXavo_hw_OOpi4LCRg";
+        cfg.AddProfile<AutoMapperProfile>();
+    });
 
     // Add HttpContextAccessor for tenant context
     builder.Services.AddHttpContextAccessor();
@@ -112,26 +135,21 @@ try
     builder.Services.AddScoped<IEmailSendingService, EmailSendingService>();
     builder.Services.AddScoped<ISystemEmailService, SystemEmailService>();
     builder.Services.AddScoped<IMessageService, MessageService>();
+    builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
+    builder.Services.AddScoped<ISesNotificationService, SesNotificationService>();
+
+    // Add HttpClientFactory for webhook confirmations
+    builder.Services.AddHttpClient();
 
     // Register Background Services
     builder.Services.AddHostedService<SesProvisioningRetryService>();
+    builder.Services.AddHostedService<ScheduledEmailService>();
 
     builder.Services.AddControllers();
-    // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-    //builder.Services.AddEndpointsApiExplorer();
-    //builder.Services.AddSwaggerGen();
-
     var app = builder.Build();
 
     app.UseDefaultFiles();
     app.UseStaticFiles();
-
-    // Configure the HTTP request pipeline.
-    if (app.Environment.IsDevelopment())
-    {
-        app.UseSwagger();
-        app.UseSwaggerUI();
-    }
 
     app.UseHttpsRedirection();
 

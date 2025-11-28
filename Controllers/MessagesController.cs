@@ -6,13 +6,13 @@ namespace Email.Server.Controllers;
 
 [ApiController]
 [Route("api/v1/[controller]")]
-[Authorize]
 public class MessagesController(IMessageService messageService, ILogger<MessagesController> logger) : ControllerBase
 {
     private readonly IMessageService _messageService = messageService;
     private readonly ILogger<MessagesController> _logger = logger;
 
     [HttpGet]
+    [Authorize(Policy = "messages:read")]
     public async Task<IActionResult> GetMessages([FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken cancellationToken = default)
     {
         try
@@ -28,6 +28,7 @@ public class MessagesController(IMessageService messageService, ILogger<Messages
     }
 
     [HttpGet("{id}")]
+    [Authorize(Policy = "messages:read")]
     public async Task<IActionResult> GetMessage(Guid id, CancellationToken cancellationToken)
     {
         try

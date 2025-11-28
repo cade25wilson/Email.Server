@@ -1,14 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Email.Server.Data;
 using Email.Server.DTOs.Requests;
 using Email.Server.DTOs.Responses;
 using Email.Server.Models;
 using Email.Server.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace Email.Server.Services.Implementations
 {
@@ -66,9 +61,8 @@ namespace Email.Server.Services.Implementations
 
                     try
                     {
-                        // Create region-specific SES client and service
-                        var sesClient = _sesClientFactory.CreateClient(region.Region);
-                        var sesService = new SesClientService(sesClient, _loggerFactory.CreateLogger<SesClientService>());
+                        // Create region-specific SES service
+                        var sesService = _sesClientFactory.CreateSesClientService(region.Region);
 
                         // Create AWS SES tenant in the specified region
                         var response = await sesService.CreateSesTenantAsync(awsSesTenantName);
@@ -183,7 +177,7 @@ namespace Email.Server.Services.Implementations
             var tenantMember = await _context.TenantMembers
                 .Include(tm => tm.Tenant)
                 .FirstOrDefaultAsync(tm => tm.TenantId == tenantId && tm.UserId == userId) ?? throw new UnauthorizedAccessException("User does not have access to this tenant");
-            
+
             if (tenantMember.TenantRole != TenantRole.Owner && tenantMember.TenantRole != TenantRole.Admin)
             {
                 throw new UnauthorizedAccessException("Only owners and admins can update tenant settings");
@@ -454,8 +448,7 @@ namespace Email.Server.Services.Implementations
             {
                 try
                 {
-                    var sesClient = _sesClientFactory.CreateClient(sesRegion.Region);
-                    var sesService = new SesClientService(sesClient, _loggerFactory.CreateLogger<SesClientService>());
+                    var sesService = _sesClientFactory.CreateSesClientService(sesRegion.Region);
 
                     await sesService.UpdateTenantSendingStatusAsync(sesRegion.AwsSesTenantArn!, true);
 

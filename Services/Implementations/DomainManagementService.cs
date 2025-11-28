@@ -15,19 +15,22 @@ public class DomainManagementService : IDomainManagementService
     private readonly ISesClientService _sesClient;
     private readonly IMapper _mapper;
     private readonly ILogger<DomainManagementService> _logger;
+    private readonly IConfiguration _configuration;
 
     public DomainManagementService(
         ApplicationDbContext context,
         ITenantContextService tenantContext,
         ISesClientService sesClient,
         IMapper mapper,
-        ILogger<DomainManagementService> logger)
+        ILogger<DomainManagementService> logger,
+        IConfiguration configuration)
     {
         _context = context;
         _tenantContext = tenantContext;
         _sesClient = sesClient;
         _mapper = mapper;
         _logger = logger;
+        _configuration = configuration;
     }
 
     public async Task<DomainResponse> CreateDomainAsync(CreateDomainRequest request, CancellationToken cancellationToken = default)
@@ -64,16 +67,24 @@ public class DomainManagementService : IDomainManagementService
             if (existingConfigSet == null)
             {
                 var configSetName = $"tenant-{tenantId}-{request.Region}";
+                var awsAccountId = _configuration["AWS:AccountId"] ?? throw new InvalidOperationException("AWS:AccountId is not configured");
 
                 _logger.LogInformation("Creating SES configuration set {ConfigSetName} for tenant {TenantId}", configSetName, tenantId);
 
-                // Create configuration set in AWS SES
-                var configSetResponse = await _sesClient.CreateConfigurationSetAsync(configSetName, cancellationToken);
+                // Create configuration set in AWS SES (handle if already exists)
+                try
+                {
+                    await _sesClient.CreateConfigurationSetAsync(configSetName, cancellationToken);
+                }
+                catch (Amazon.SimpleEmailV2.Model.AlreadyExistsException)
+                {
+                    _logger.LogInformation("Configuration set {ConfigSetName} already exists in AWS, skipping creation", configSetName);
+                }
 
                 // Associate configuration set to AWS SES tenant if tenant name exists
                 if (!string.IsNullOrEmpty(sesRegion.AwsSesTenantName))
                 {
-                    var configSetArn = $"arn:aws:ses:{request.Region}:{Environment.GetEnvironmentVariable("AWS_ACCOUNT_ID")}:configuration-set/{configSetName}";
+                    var configSetArn = $"arn:aws:ses:{request.Region}:{awsAccountId}:configuration-set/{configSetName}";
                     await _sesClient.AssociateResourceToTenantAsync(sesRegion.AwsSesTenantName, configSetArn, cancellationToken);
                     _logger.LogInformation("Associated configuration set {ConfigSetName} to AWS SES tenant {AwsSesTenantName}",
                         configSetName, sesRegion.AwsSesTenantName);
@@ -102,7 +113,8 @@ public class DomainManagementService : IDomainManagementService
             // Associate email identity to AWS SES tenant if tenant name exists
             if (!string.IsNullOrEmpty(sesRegion.AwsSesTenantName))
             {
-                var identityArn = $"arn:aws:ses:{request.Region}:{Environment.GetEnvironmentVariable("AWS_ACCOUNT_ID")}:identity/{request.Domain}";
+                var awsAccountId = _configuration["AWS:AccountId"] ?? throw new InvalidOperationException("AWS:AccountId is not configured");
+                var identityArn = $"arn:aws:ses:{request.Region}:{awsAccountId}:identity/{request.Domain}";
                 await _sesClient.AssociateResourceToTenantAsync(sesRegion.AwsSesTenantName, identityArn, cancellationToken);
                 _logger.LogInformation("Associated email identity {Domain} to AWS SES tenant {AwsSesTenantName}",
                     request.Domain, sesRegion.AwsSesTenantName);
@@ -141,6 +153,18 @@ public class DomainManagementService : IDomainManagementService
                     _context.DomainDnsRecords.Add(dnsRecord);
                 }
             }
+
+            // Add DMARC TXT record
+            var dmarcRecord = new DomainDnsRecords
+            {
+                DomainId = domain.Id,
+                RecordType = "TXT",
+                Host = $"_dmarc.{request.Domain}",
+                Value = "v=DMARC1; p=none;",
+                Required = false,
+                Status = 0 // Unknown
+            };
+            _context.DomainDnsRecords.Add(dmarcRecord);
 
             await _context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -238,11 +262,29 @@ public class DomainManagementService : IDomainManagementService
         var tenantId = _tenantContext.GetTenantId();
 
         var domain = await _context.Domains
-            .FirstOrDefaultAsync(d => d.Id == domainId && d.TenantId == tenantId, cancellationToken);
+            .FirstOrDefaultAsync(d => d.Id == domainId && d.TenantId == tenantId, cancellationToken) ?? throw new KeyNotFoundException($"Domain {domainId} not found");
 
-        if (domain == null)
+        // Get the SesRegion to find the AWS SES tenant name
+        var sesRegion = await _context.SesRegions
+            .FirstOrDefaultAsync(sr => sr.TenantId == tenantId && sr.Region == domain.Region, cancellationToken);
+
+        // Disassociate from AWS SES tenant before deletion
+        if (sesRegion != null && !string.IsNullOrEmpty(sesRegion.AwsSesTenantName))
         {
-            throw new KeyNotFoundException($"Domain {domainId} not found");
+            try
+            {
+                var awsAccountId = _configuration["AWS:AccountId"] ?? throw new InvalidOperationException("AWS:AccountId is not configured");
+                var identityArn = $"arn:aws:ses:{domain.Region}:{awsAccountId}:identity/{domain.Domain}";
+
+                _logger.LogInformation("Disassociating email identity {Domain} from AWS SES tenant {AwsSesTenantName}",
+                    domain.Domain, sesRegion.AwsSesTenantName);
+
+                await _sesClient.DisassociateResourceFromTenantAsync(sesRegion.AwsSesTenantName, identityArn, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error disassociating domain from AWS SES tenant, continuing with deletion");
+            }
         }
 
         // Delete from SES

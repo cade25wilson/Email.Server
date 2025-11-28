@@ -2,6 +2,7 @@ using Amazon;
 using Amazon.Runtime;
 using Amazon.Runtime.CredentialManagement;
 using Amazon.SimpleEmailV2;
+using Email.Server.Services.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -10,18 +11,14 @@ namespace Email.Server.Services.Implementations;
 public interface ISesClientFactory
 {
     AmazonSimpleEmailServiceV2Client CreateClient(string region);
+    ISesClientService CreateSesClientService(string region);
 }
 
-public class SesClientFactory : ISesClientFactory
+public class SesClientFactory(IConfiguration configuration, ILogger<SesClientFactory> logger, ILoggerFactory loggerFactory) : ISesClientFactory
 {
-    private readonly IConfiguration _configuration;
-    private readonly ILogger<SesClientFactory> _logger;
-
-    public SesClientFactory(IConfiguration configuration, ILogger<SesClientFactory> logger)
-    {
-        _configuration = configuration;
-        _logger = logger;
-    }
+    private readonly IConfiguration _configuration = configuration;
+    private readonly ILogger<SesClientFactory> _logger = logger;
+    private readonly ILoggerFactory _loggerFactory = loggerFactory;
 
     public AmazonSimpleEmailServiceV2Client CreateClient(string region)
     {
@@ -53,5 +50,11 @@ public class SesClientFactory : ISesClientFactory
         // 3. Fall back to default credential chain (IAM roles, environment variables, etc.)
         _logger.LogDebug("Creating SES client for region {Region} using default credential chain", region);
         return new AmazonSimpleEmailServiceV2Client(regionEndpoint);
+    }
+
+    public ISesClientService CreateSesClientService(string region)
+    {
+        var client = CreateClient(region);
+        return new SesClientService(client, _loggerFactory.CreateLogger<SesClientService>());
     }
 }

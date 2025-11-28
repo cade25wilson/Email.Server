@@ -11,6 +11,9 @@ public class ApiKeys
     [ForeignKey("Tenant")]
     public Guid TenantId { get; set; }
 
+    [ForeignKey("Domain")]
+    public Guid DomainId { get; set; }
+
     [MaxLength(200)]
     public required string Name { get; set; }
 
@@ -26,6 +29,10 @@ public class ApiKeys
 
     public bool IsRevoked { get; set; } = false;
 
+    [MaxLength(500)]
+    public string Scopes { get; set; } = string.Empty; // comma-separated: "emails:send,domains:read"
+
     // Navigation properties
     public Tenants? Tenant { get; set; }
+    public Domains? Domain { get; set; }
 }

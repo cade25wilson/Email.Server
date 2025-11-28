@@ -1,11 +1,17 @@
 using Email.Server.Models;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Email.Server.Data;
 
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options)
 {
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        optionsBuilder.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
+    }
     // Tenants & membership
     public DbSet<Tenants> Tenants { get; set; }
     public DbSet<TenantMembers> TenantMembers { get; set; }
@@ -50,7 +56,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<Tenants>(entity =>
         {
             entity.ToTable("Tenants");
-            entity.Property(t => t.Id).HasDefaultValueSql("NEWID()");
+            entity.Property(t => t.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
         });
 
         // TenantMembers
@@ -83,8 +89,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
             // Seed data
             entity.HasData(
-                new RegionsCatalog { Region = "us-east-1", DisplayName = "US East (N. Virginia)", SendSupported = true, ReceiveSupported = true, DefaultForNewTenants = true },
-                new RegionsCatalog { Region = "us-west-2", DisplayName = "US West (Oregon)", SendSupported = true, ReceiveSupported = true, DefaultForNewTenants = false },
+                new RegionsCatalog { Region = "us-east-1", DisplayName = "US East (N. Virginia)", SendSupported = true, ReceiveSupported = true, DefaultForNewTenants = false },
+                new RegionsCatalog { Region = "us-west-2", DisplayName = "US West (Oregon)", SendSupported = true, ReceiveSupported = true, DefaultForNewTenants = true },
                 new RegionsCatalog { Region = "eu-west-1", DisplayName = "EU (Ireland)", SendSupported = true, ReceiveSupported = true, DefaultForNewTenants = false },
                 new RegionsCatalog { Region = "ap-southeast-2", DisplayName = "APAC (Sydney)", SendSupported = true, ReceiveSupported = true, DefaultForNewTenants = false }
             );
@@ -94,7 +100,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<SesRegions>(entity =>
         {
             entity.ToTable("SesRegions");
-            entity.Property(s => s.Id).HasDefaultValueSql("NEWID()");
+            entity.Property(s => s.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
             entity.HasIndex(s => new { s.TenantId, s.Region }).IsUnique().HasDatabaseName("UQ_SesRegions_TenantRegion");
 
             entity.HasOne(s => s.Tenant)
@@ -112,7 +118,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<ConfigSets>(entity =>
         {
             entity.ToTable("ConfigSets");
-            entity.Property(c => c.Id).HasDefaultValueSql("NEWID()");
+            entity.Property(c => c.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
             entity.HasIndex(c => new { c.SesRegionId, c.Name }).IsUnique().HasDatabaseName("UQ_ConfigSets_Scope");
 
             entity.HasOne(c => c.SesRegion)
@@ -125,7 +131,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<Domains>(entity =>
         {
             entity.ToTable("Domains");
-            entity.Property(d => d.Id).HasDefaultValueSql("NEWID()");
+            entity.Property(d => d.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
             entity.HasIndex(d => new { d.TenantId, d.Region, d.Domain }).IsUnique().HasDatabaseName("UQ_Domains_TenantRegion");
             entity.HasIndex(d => new { d.TenantId, d.VerificationStatus, d.DkimStatus }).HasDatabaseName("IX_Domains_Tenant_Status");
 
@@ -156,7 +162,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<Senders>(entity =>
         {
             entity.ToTable("Senders");
-            entity.Property(s => s.Id).HasDefaultValueSql("NEWID()");
+            entity.Property(s => s.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
             entity.HasIndex(s => new { s.DomainId, s.Email }).IsUnique().HasDatabaseName("UQ_Senders");
 
             entity.HasOne(s => s.Domain)
@@ -169,21 +175,27 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<ApiKeys>(entity =>
         {
             entity.ToTable("ApiKeys");
-            entity.Property(a => a.Id).HasDefaultValueSql("NEWID()");
+            entity.Property(a => a.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
             entity.HasIndex(a => a.TenantId).HasDatabaseName("IX_ApiKeys_Tenant");
             entity.HasIndex(a => a.KeyPrefix).IsUnique().HasDatabaseName("UX_ApiKeys_Prefix");
+            entity.HasIndex(a => a.DomainId).HasDatabaseName("IX_ApiKeys_Domain");
 
             entity.HasOne(a => a.Tenant)
                 .WithMany()
                 .HasForeignKey(a => a.TenantId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(a => a.Domain)
+                .WithMany()
+                .HasForeignKey(a => a.DomainId)
+                .OnDelete(DeleteBehavior.NoAction); // NoAction to avoid cascade cycle with Tenant
         });
 
         // Messages
         builder.Entity<Messages>(entity =>
         {
             entity.ToTable("Messages");
-            entity.Property(m => m.Id).HasDefaultValueSql("NEWID()");
+            entity.Property(m => m.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
             entity.HasIndex(m => new { m.TenantId, m.RequestedAtUtc }).HasDatabaseName("IX_Messages_Tenant_Time");
             entity.HasIndex(m => m.SesMessageId).HasDatabaseName("IX_Messages_SesMessageId");
 
@@ -268,7 +280,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<Templates>(entity =>
         {
             entity.ToTable("Templates");
-            entity.Property(t => t.Id).HasDefaultValueSql("NEWID()");
+            entity.Property(t => t.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
             entity.HasIndex(t => new { t.TenantId, t.Name, t.Version }).IsUnique().HasDatabaseName("UQ_Templates");
 
             entity.HasOne(t => t.Tenant)
@@ -281,7 +293,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<WebhookEndpoints>(entity =>
         {
             entity.ToTable("WebhookEndpoints");
-            entity.Property(w => w.Id).HasDefaultValueSql("NEWID()");
+            entity.Property(w => w.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
 
             entity.HasOne(w => w.Tenant)
                 .WithMany()
@@ -310,7 +322,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         builder.Entity<InboundMessages>(entity =>
         {
             entity.ToTable("InboundMessages");
-            entity.Property(i => i.Id).HasDefaultValueSql("NEWID()");
+            entity.Property(i => i.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
             entity.HasIndex(i => new { i.TenantId, i.ReceivedAtUtc }).HasDatabaseName("IX_InboundMessages_Tenant_Time");
 
             entity.HasOne(i => i.Tenant)

@@ -41,4 +41,20 @@ public class TenantContextService : ITenantContextService
         var tenantIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst("TenantId");
         return tenantIdClaim != null && Guid.TryParse(tenantIdClaim.Value, out _);
     }
+
+    public bool IsApiKeyAuthenticated()
+    {
+        var authMethod = _httpContextAccessor.HttpContext?.User?.FindFirst("AuthMethod")?.Value;
+        return authMethod == "ApiKey";
+    }
+
+    public Guid? GetApiKeyId()
+    {
+        var apiKeyIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst("ApiKeyId");
+        if (apiKeyIdClaim != null && Guid.TryParse(apiKeyIdClaim.Value, out var keyId))
+        {
+            return keyId;
+        }
+        return null;
+    }
 }

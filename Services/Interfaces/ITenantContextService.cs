@@ -5,4 +5,6 @@ public interface ITenantContextService
     Guid GetTenantId();
     string GetUserId();
     bool HasTenant();
+    bool IsApiKeyAuthenticated();
+    Guid? GetApiKeyId();
 }

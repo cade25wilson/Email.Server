@@ -4,10 +4,34 @@ using Email.Server.Services.Interfaces;
 
 namespace Email.Server.Services.Implementations;
 
-public class SesClientService(IAmazonSimpleEmailServiceV2 sesClient, ILogger<SesClientService> logger) : ISesClientService
+public class SesClientService : ISesClientService
 {
-    private readonly IAmazonSimpleEmailServiceV2 _sesClient = sesClient;
-    private readonly ILogger<SesClientService> _logger = logger;
+    private readonly IAmazonSimpleEmailServiceV2 _sesClient;
+    private readonly ILogger<SesClientService> _logger;
+
+    /// <summary>
+    /// Constructor for DI - uses default region from configuration
+    /// </summary>
+    public SesClientService(
+        ISesClientFactory sesClientFactory,
+        IConfiguration configuration,
+        ILogger<SesClientService> logger)
+    {
+        var region = configuration["AWS:Region"] ?? "us-east-1";
+        _sesClient = sesClientFactory.CreateClient(region);
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Constructor for region-specific client - used by factory for multi-region scenarios
+    /// </summary>
+    internal SesClientService(
+        IAmazonSimpleEmailServiceV2 sesClient,
+        ILogger<SesClientService> logger)
+    {
+        _sesClient = sesClient;
+        _logger = logger;
+    }
 
     public async Task<CreateEmailIdentityResponse> CreateEmailIdentityAsync(string domain, CancellationToken cancellationToken = default)
     {
@@ -177,6 +201,27 @@ public class SesClientService(IAmazonSimpleEmailServiceV2 sesClient, ILogger<Ses
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error associating resource {ResourceArn} to AWS SES tenant: {TenantName}", resourceArn, tenantName);
+            throw;
+        }
+    }
+
+    public async Task DisassociateResourceFromTenantAsync(string tenantName, string resourceArn, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var request = new DeleteTenantResourceAssociationRequest
+            {
+                TenantName = tenantName,
+                ResourceArn = resourceArn
+            };
+
+            _logger.LogInformation("Disassociating resource {ResourceArn} from AWS SES tenant: {TenantName}", resourceArn, tenantName);
+            await _sesClient.DeleteTenantResourceAssociationAsync(request, cancellationToken);
+            _logger.LogInformation("Successfully disassociated resource from AWS SES tenant: {TenantName}", tenantName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error disassociating resource {ResourceArn} from AWS SES tenant: {TenantName}", resourceArn, tenantName);
             throw;
         }
     }
