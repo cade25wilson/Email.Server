@@ -271,4 +271,25 @@ public class SesClientService : ISesClientService
             throw;
         }
     }
+
+    public async Task<GetConfigurationSetResponse> GetConfigurationSetAsync(string configurationSetName, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var request = new GetConfigurationSetRequest
+            {
+                ConfigurationSetName = configurationSetName
+            };
+
+            _logger.LogInformation("Getting SES configuration set: {ConfigurationSetName}", configurationSetName);
+            var response = await _sesClient.GetConfigurationSetAsync(request, cancellationToken);
+
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting SES configuration set: {ConfigurationSetName}", configurationSetName);
+            throw;
+        }
+    }
 }

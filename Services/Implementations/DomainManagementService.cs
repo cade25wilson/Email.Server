@@ -249,6 +249,31 @@ public class DomainManagementService : IDomainManagementService
             domain.VerifiedAtUtc = DateTime.UtcNow;
         }
 
+        // Update DNS record statuses based on DKIM status
+        var dnsRecords = await _context.DomainDnsRecords
+            .Where(r => r.DomainId == domainId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var record in dnsRecords)
+        {
+            if (record.RecordType == "CNAME" && record.Host.Contains("._domainkey."))
+            {
+                // DKIM CNAME records - status based on DKIM verification
+                record.Status = domain.DkimStatus == 1 ? (byte)1 : // Verified
+                               domain.DkimStatus == 2 ? (byte)2 : // Failed
+                               (byte)0; // Pending/Unknown
+            }
+            else if (record.RecordType == "TXT" && record.Host.StartsWith("_dmarc."))
+            {
+                // DMARC record - we can't verify this from SES, leave as unknown unless domain is verified
+                // If domain is fully verified, assume DMARC is also configured
+                if (domain.VerificationStatus == 1 && domain.DkimStatus == 1)
+                {
+                    record.Status = (byte)1; // Verified (assumed)
+                }
+            }
+        }
+
         await _context.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Updated verification status for domain {Domain}: Verified={Verified}, DKIM={Dkim}",

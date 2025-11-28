@@ -23,4 +23,9 @@ public interface ISesClientService
     /// <param name="tenantArn">The ARN of the tenant</param>
     /// <param name="enabled">True to enable sending, false to disable</param>
     Task UpdateTenantSendingStatusAsync(string tenantArn, bool enabled, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a configuration set by name and returns its ARN
+    /// </summary>
+    Task<GetConfigurationSetResponse> GetConfigurationSetAsync(string configurationSetName, CancellationToken cancellationToken = default);
 }

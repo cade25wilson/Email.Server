@@ -138,14 +138,20 @@ try
     builder.Services.AddScoped<ISystemEmailService, SystemEmailService>();
     builder.Services.AddScoped<IMessageService, MessageService>();
     builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
+    builder.Services.AddScoped<IWebhookDeliveryService, WebhookDeliveryService>();
     builder.Services.AddScoped<ISesNotificationService, SesNotificationService>();
 
-    // Add HttpClientFactory for webhook confirmations
+    // Add HttpClientFactory for webhook confirmations and deliveries
     builder.Services.AddHttpClient();
+    builder.Services.AddHttpClient("WebhookClient", client =>
+    {
+        client.DefaultRequestHeaders.Add("Accept", "application/json");
+    });
 
     // Register Background Services
     builder.Services.AddHostedService<SesProvisioningRetryService>();
     builder.Services.AddHostedService<ScheduledEmailService>();
+    builder.Services.AddHostedService<Email.Server.Services.Background.WebhookDeliveryBackgroundService>();
 
     builder.Services.AddControllers();
     var app = builder.Build();

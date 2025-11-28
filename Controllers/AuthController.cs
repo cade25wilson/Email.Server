@@ -317,6 +317,37 @@ public class AuthController(
     }
 
     [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+        {
+            return NotFound();
+        }
+
+        var result = await _userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            return BadRequest(new ErrorResponse
+            {
+                Message = "Failed to change password",
+                Errors = [.. result.Errors.Select(e => e.Description)]
+            });
+        }
+
+        _logger.LogInformation("Password changed for user {Email}", user.Email);
+
+        return Ok(new { message = "Password changed successfully" });
+    }
+
+    [Authorize]
     [HttpPost("switch-tenant")]
     public async Task<IActionResult> SwitchTenant([FromBody] SwitchTenantRequest request)
     {

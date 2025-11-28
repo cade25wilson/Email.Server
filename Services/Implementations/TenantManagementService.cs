@@ -7,12 +7,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Email.Server.Services.Implementations
 {
-    public class TenantManagementService(ApplicationDbContext context, ILogger<TenantManagementService> logger, ILoggerFactory loggerFactory, ISesClientFactory sesClientFactory) : ITenantManagementService
+    public class TenantManagementService(
+        ApplicationDbContext context,
+        ILogger<TenantManagementService> logger,
+        ILoggerFactory loggerFactory,
+        ISesClientFactory sesClientFactory,
+        IConfiguration configuration) : ITenantManagementService
     {
         private readonly ApplicationDbContext _context = context;
         private readonly ILogger<TenantManagementService> _logger = logger;
         private readonly ILoggerFactory _loggerFactory = loggerFactory;
         private readonly ISesClientFactory _sesClientFactory = sesClientFactory;
+        private readonly IConfiguration _configuration = configuration;
 
         public async Task<TenantResponse> CreateTenantAsync(string tenantName, string userId, bool enableSending = true)
         {
@@ -78,6 +84,31 @@ namespace Email.Server.Services.Implementations
                         _logger.LogInformation("Created AWS SES tenant {AwsSesTenantName} (ID: {TenantId}, ARN: {TenantArn}) in region {Region}",
                             awsSesTenantName, response.TenantId, response.TenantArn, region.Region);
 
+                        // Assign the default configuration set to the tenant
+                        var defaultConfigSetName = _configuration["SES:DefaultConfigurationSetName"];
+                        if (!string.IsNullOrEmpty(defaultConfigSetName))
+                        {
+                            try
+                            {
+                                // Get the configuration set to obtain its ARN
+                                var configSetResponse = await sesService.GetConfigurationSetAsync(defaultConfigSetName);
+                                if (!string.IsNullOrEmpty(configSetResponse.ConfigurationSetName))
+                                {
+                                    // Build the configuration set ARN
+                                    var awsAccountId = _configuration["AWS:AccountId"];
+                                    var configSetArn = $"arn:aws:ses:{region.Region}:{awsAccountId}:configuration-set/{defaultConfigSetName}";
+
+                                    await sesService.AssociateResourceToTenantAsync(awsSesTenantName, configSetArn);
+                                    _logger.LogInformation("Assigned configuration set '{ConfigSetName}' to AWS SES tenant {AwsSesTenantName}",
+                                        defaultConfigSetName, awsSesTenantName);
+                                }
+                            }
+                            catch (Exception configSetEx)
+                            {
+                                _logger.LogWarning(configSetEx, "Failed to assign configuration set to tenant {AwsSesTenantName}, but tenant was created successfully", awsSesTenantName);
+                            }
+                        }
+
                         // If sending should be disabled (unverified user), disable it now
                         if (!enableSending && !string.IsNullOrEmpty(response.TenantArn))
                         {
@@ -105,6 +136,22 @@ namespace Email.Server.Services.Implementations
 
                     // Store in database regardless of success/failure
                     _context.SesRegions.Add(sesRegion);
+                    await _context.SaveChangesAsync(); // Save to get the SesRegion ID
+
+                    // Create default ConfigSet for webhook notifications
+                    var dbConfigSetName = _configuration["SES:DefaultConfigurationSetName"] ?? "defaultconfigset";
+                    var configSet = new ConfigSets
+                    {
+                        SesRegionId = sesRegion.Id,
+                        Name = "Default",
+                        ConfigSetName = dbConfigSetName,
+                        IsDefault = true,
+                        CreatedAtUtc = DateTime.UtcNow
+                    };
+                    _context.ConfigSets.Add(configSet);
+
+                    _logger.LogInformation("Created default ConfigSet '{ConfigSetName}' for tenant {TenantId} in region {Region}",
+                        dbConfigSetName, tenant.Id, region.Region);
                 }
 
                 await _context.SaveChangesAsync();

@@ -9,9 +9,11 @@ namespace Email.Server.Services.Implementations;
 
 public class SesNotificationService(
     ApplicationDbContext dbContext,
+    IWebhookDeliveryService webhookDeliveryService,
     ILogger<SesNotificationService> logger) : ISesNotificationService
 {
     private readonly ApplicationDbContext _dbContext = dbContext;
+    private readonly IWebhookDeliveryService _webhookDeliveryService = webhookDeliveryService;
     private readonly ILogger<SesNotificationService> _logger = logger;
 
     public async Task ProcessNotificationAsync(SesNotification notification, CancellationToken cancellationToken = default)
@@ -84,6 +86,9 @@ public class SesNotificationService(
         _dbContext.MessageEvents.Add(messageEvent);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Trigger webhooks for this event
+        await TriggerWebhooksAsync(messageEvent, cancellationToken);
     }
 
     private async Task ProcessBounceAsync(Messages message, SesNotification notification, CancellationToken cancellationToken)
@@ -143,9 +148,12 @@ public class SesNotificationService(
                 PayloadJson = JsonSerializer.Serialize(notification)
             };
             _dbContext.MessageEvents.Add(messageEvent);
-        }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Trigger webhooks for this event
+            await TriggerWebhooksAsync(messageEvent, cancellationToken);
+        }
     }
 
     private async Task ProcessComplaintAsync(Messages message, SesNotification notification, CancellationToken cancellationToken)
@@ -201,8 +209,24 @@ public class SesNotificationService(
                 PayloadJson = JsonSerializer.Serialize(notification)
             };
             _dbContext.MessageEvents.Add(messageEvent);
-        }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Trigger webhooks for this event
+            await TriggerWebhooksAsync(messageEvent, cancellationToken);
+        }
+    }
+
+    private async Task TriggerWebhooksAsync(MessageEvents messageEvent, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _webhookDeliveryService.TriggerWebhooksForEventAsync(messageEvent, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Don't fail the notification processing if webhook triggering fails
+            _logger.LogError(ex, "Failed to trigger webhooks for event {EventId}", messageEvent.Id);
+        }
     }
 }

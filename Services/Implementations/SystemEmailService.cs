@@ -70,6 +70,8 @@ If you didn't create an account, you can safely ignore this email.
 This link will expire in 24 hours.
 ";
 
+        var configurationSetName = _configuration["SES:DefaultConfigurationSetName"];
+
         var request = new SendEmailRequest
         {
             FromEmailAddress = $"{fromName} <{fromEmail}>",
@@ -88,7 +90,8 @@ This link will expire in 24 hours.
                         Text = new Content { Data = textBody }
                     }
                 }
-            }
+            },
+            ConfigurationSetName = configurationSetName
         };
 
         try
@@ -151,6 +154,8 @@ If you didn't request a password reset, you can safely ignore this email.
 This link will expire in 1 hour.
 ";
 
+        var configurationSetName = _configuration["SES:DefaultConfigurationSetName"];
+
         var request = new SendEmailRequest
         {
             FromEmailAddress = $"{fromName} <{fromEmail}>",
@@ -169,7 +174,8 @@ This link will expire in 1 hour.
                         Text = new Content { Data = textBody }
                     }
                 }
-            }
+            },
+            ConfigurationSetName = configurationSetName
         };
 
         try

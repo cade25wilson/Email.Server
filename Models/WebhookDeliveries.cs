@@ -21,6 +21,12 @@ public class WebhookDeliveries
 
     public DateTime? LastAttemptUtc { get; set; }
 
+    public int? ResponseStatusCode { get; set; } // HTTP response status code
+
+    public string? ResponseBody { get; set; } // HTTP response body (truncated if large)
+
+    public DateTime? NextRetryAtUtc { get; set; } // When to retry next (for exponential backoff)
+
     // Navigation properties
     public WebhookEndpoints? Endpoint { get; set; }
     public MessageEvents? Event { get; set; }

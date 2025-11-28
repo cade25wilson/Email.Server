@@ -194,12 +194,24 @@ public class EmailSendingService : IEmailSendingService
                 }
             };
 
+            // Use specified ConfigSet or fall back to default
             if (request.ConfigSetId.HasValue)
             {
                 var configSet = await _context.ConfigSets.FindAsync(request.ConfigSetId.Value);
                 if (configSet != null)
                 {
                     sesRequest.ConfigurationSetName = configSet.ConfigSetName;
+                }
+            }
+            else
+            {
+                // Use the default ConfigSet for this tenant's region
+                var defaultConfigSet = await _context.ConfigSets
+                    .FirstOrDefaultAsync(cs => cs.SesRegionId == sesRegion.Id && cs.IsDefault, cancellationToken);
+                if (defaultConfigSet != null)
+                {
+                    sesRequest.ConfigurationSetName = defaultConfigSet.ConfigSetName;
+                    _logger.LogDebug("Using default ConfigSet '{ConfigSetName}' for email", defaultConfigSet.ConfigSetName);
                 }
             }
 
@@ -328,12 +340,23 @@ public class EmailSendingService : IEmailSendingService
                 }
             };
 
+            // Use specified ConfigSet or fall back to default
             if (message.ConfigSetId.HasValue)
             {
                 var configSet = await _context.ConfigSets.FindAsync(message.ConfigSetId.Value);
                 if (configSet != null)
                 {
                     sesRequest.ConfigurationSetName = configSet.ConfigSetName;
+                }
+            }
+            else
+            {
+                // Use the default ConfigSet for this tenant's region
+                var defaultConfigSet = await _context.ConfigSets
+                    .FirstOrDefaultAsync(cs => cs.SesRegionId == sesRegion.Id && cs.IsDefault, cancellationToken);
+                if (defaultConfigSet != null)
+                {
+                    sesRequest.ConfigurationSetName = defaultConfigSet.ConfigSetName;
                 }
             }
 
