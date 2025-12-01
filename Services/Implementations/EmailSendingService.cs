@@ -13,17 +13,20 @@ public class EmailSendingService : IEmailSendingService
     private readonly ApplicationDbContext _context;
     private readonly ITenantContextService _tenantContext;
     private readonly ISesClientService _sesClient;
+    private readonly IUsageTrackingService _usageTracking;
     private readonly ILogger<EmailSendingService> _logger;
 
     public EmailSendingService(
         ApplicationDbContext context,
         ITenantContextService tenantContext,
         ISesClientService sesClient,
+        IUsageTrackingService usageTracking,
         ILogger<EmailSendingService> logger)
     {
         _context = context;
         _tenantContext = tenantContext;
         _sesClient = sesClient;
+        _usageTracking = usageTracking;
         _logger = logger;
     }
 
@@ -66,6 +69,14 @@ public class EmailSendingService : IEmailSendingService
         if (suppressedEmails.Any())
         {
             throw new InvalidOperationException($"The following recipients are suppressed: {string.Join(", ", suppressedEmails)}");
+        }
+
+        // Check usage limits before sending
+        var recipientCount = request.To.Count + (request.Cc?.Count ?? 0) + (request.Bcc?.Count ?? 0);
+        var usageCheck = await _usageTracking.CheckUsageLimitAsync(tenantId, recipientCount, cancellationToken);
+        if (!usageCheck.Allowed)
+        {
+            throw new InvalidOperationException(usageCheck.DenialReason ?? "Email sending limit exceeded. Please upgrade your plan or wait for the next billing period.");
         }
 
         // Determine if this is a scheduled send
@@ -230,6 +241,9 @@ public class EmailSendingService : IEmailSendingService
 
             _logger.LogInformation("Email sent successfully. MessageId: {MessageId}, SesMessageId: {SesMessageId}",
                 message.Id, sesResponse.MessageId);
+
+            // Record usage for billing
+            await _usageTracking.RecordEmailSendAsync(tenantId, recipientCount, "API", cancellationToken);
         }
         catch (Exception ex)
         {
@@ -266,6 +280,25 @@ public class EmailSendingService : IEmailSendingService
         var recipients = await _context.MessageRecipients
             .Where(r => r.MessageId == messageId)
             .ToListAsync(cancellationToken);
+
+        // Check usage limits before sending
+        var recipientCount = recipients.Count;
+        var usageCheck = await _usageTracking.CheckUsageLimitAsync(message.TenantId, recipientCount, cancellationToken);
+        if (!usageCheck.Allowed)
+        {
+            message.Status = 2; // Failed
+            message.Error = usageCheck.DenialReason ?? "Email sending limit exceeded. Please upgrade your plan or wait for the next billing period.";
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return new DTOs.Responses.SendEmailResponse
+            {
+                MessageId = message.Id,
+                Status = message.Status,
+                RequestedAtUtc = message.RequestedAtUtc,
+                ScheduledAtUtc = message.ScheduledAtUtc,
+                Error = message.Error
+            };
+        }
 
         // Get domain info for SES region
         var fromDomain = message.FromEmail.Split('@')[1];
@@ -373,6 +406,9 @@ public class EmailSendingService : IEmailSendingService
 
             _logger.LogInformation("Scheduled email sent successfully. MessageId: {MessageId}, SesMessageId: {SesMessageId}",
                 message.Id, sesResponse.MessageId);
+
+            // Record usage for billing
+            await _usageTracking.RecordEmailSendAsync(message.TenantId, recipientCount, "Scheduled", cancellationToken);
         }
         catch (Exception ex)
         {

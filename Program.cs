@@ -3,7 +3,6 @@ using Email.Server.Configuration;
 using Email.Server.Data;
 using Email.Server.DTOs.Requests;
 using Email.Server.Mapping;
-using Email.Server.Services.Background;
 using Email.Server.Services.Implementations;
 using Email.Server.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -159,13 +158,6 @@ try
     {
         client.DefaultRequestHeaders.Add("Accept", "application/json");
     });
-
-    // Register Background Services
-    builder.Services.AddHostedService<SesProvisioningRetryService>();
-    builder.Services.AddHostedService<ScheduledEmailService>();
-    builder.Services.AddHostedService<WebhookDeliveryBackgroundService>();
-    builder.Services.AddHostedService<UsageReportingBackgroundService>();
-    builder.Services.AddHostedService<GracePeriodEnforcementBackgroundService>();
 
     builder.Services.AddControllers();
     var app = builder.Build();
