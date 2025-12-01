@@ -150,10 +150,17 @@ public class StripeWebhookService : IStripeWebhookService
         var subscription = stripeEvent.Data.Object as Subscription
             ?? throw new InvalidOperationException("Invalid subscription object");
 
+        // Try to get tenant_id from metadata first, then fall back to customer lookup
         var tenantId = GetTenantIdFromMetadata(subscription.Metadata);
         if (tenantId == null)
         {
-            _logger.LogWarning("No tenant_id in subscription metadata: {SubscriptionId}",
+            // Try to find tenant via customer ID (linked during checkout)
+            tenantId = await GetTenantIdFromCustomerAsync(subscription.CustomerId, ct);
+        }
+
+        if (tenantId == null)
+        {
+            _logger.LogWarning("No tenant_id in subscription metadata and customer not linked: {SubscriptionId}",
                 subscription.Id);
             return;
         }
@@ -415,10 +422,20 @@ public class StripeWebhookService : IStripeWebhookService
         var session = stripeEvent.Data.Object as Stripe.Checkout.Session
             ?? throw new InvalidOperationException("Invalid checkout session object");
 
+        // Try to get tenant_id from metadata first, then fall back to client_reference_id (for Payment Links)
         var tenantId = GetTenantIdFromMetadata(session.Metadata);
+        if (tenantId == null && !string.IsNullOrEmpty(session.ClientReferenceId))
+        {
+            if (Guid.TryParse(session.ClientReferenceId, out var refId))
+            {
+                tenantId = refId;
+                _logger.LogInformation("Got tenant_id from client_reference_id: {TenantId}", tenantId);
+            }
+        }
+
         if (tenantId == null)
         {
-            _logger.LogWarning("No tenant_id in checkout session metadata: {SessionId}",
+            _logger.LogWarning("No tenant_id in checkout session metadata or client_reference_id: {SessionId}",
                 session.Id);
             return;
         }
