@@ -1,11 +1,11 @@
 using Email.Server.Models;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Email.Server.Data;
 
-public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser>(options)
+// Note: Changed from IdentityDbContext to DbContext since we now use Entra External ID for authentication
+public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : DbContext(options)
 {
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -73,16 +73,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.ToTable("TenantMembers");
             entity.HasKey(tm => new { tm.TenantId, tm.UserId });
             entity.HasIndex(tm => tm.UserId).HasDatabaseName("IX_TenantMembers_User");
+            entity.HasIndex(tm => tm.UserEmail).HasDatabaseName("IX_TenantMembers_Email");
 
             entity.HasOne(tm => tm.Tenant)
                 .WithMany()
                 .HasForeignKey(tm => tm.TenantId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasOne(tm => tm.User)
-                .WithMany()
-                .HasForeignKey(tm => tm.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
+            // UserId is now just a string (Entra Object ID), not a FK to AspNetUsers
 
             entity.Property(tm => tm.TenantRole)
                 .HasConversion<string>()

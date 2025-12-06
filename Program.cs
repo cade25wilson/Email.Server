@@ -5,13 +5,11 @@ using Email.Server.DTOs.Requests;
 using Email.Server.Mapping;
 using Email.Server.Services.Implementations;
 using Email.Server.Services.Interfaces;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Serilog;
-using System.Text;
 
 // Configure Serilog
 var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
@@ -38,50 +36,63 @@ try
         options.UseSqlServer(connectionString);
     });
 
-    // Configure Identity
-    builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
-    {
-        // Password settings
-        options.Password.RequireDigit = true;
-        options.Password.RequireLowercase = true;
-        options.Password.RequireUppercase = true;
-        options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequiredLength = 6;
+    // Note: ASP.NET Identity has been removed - we now use Entra External ID for authentication
+    // Users are managed in Entra, not in the local database
 
-        // User settings
-        options.User.RequireUniqueEmail = true;
-
-        // Sign-in settings
-        options.SignIn.RequireConfirmedEmail = false; // Set to true if you want email confirmation
-    })
-    .AddEntityFrameworkStores<ApplicationDbContext>()
-    .AddDefaultTokenProviders();
-
-    // Configure JWT Authentication
-    var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-    var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured");
-
-    builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
+    // Configure Entra External ID (CIAM) Authentication
+    var azureAdConfig = builder.Configuration.GetSection("AzureAd");
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
         {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSettings["Issuer"],
-            ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
-            ClockSkew = TimeSpan.Zero
-        };
-    })
-    .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
-        ApiKeyAuthenticationHandler.SchemeName, null);
+            var instance = azureAdConfig["Instance"]?.TrimEnd('/');
+            var tenantId = azureAdConfig["TenantId"];
+            var clientId = azureAdConfig["ClientId"];
+
+            // For CIAM (External ID), use the ciamlogin.com authority
+            // The metadata endpoint will provide the correct issuer
+            options.Authority = $"{instance}/{tenantId}/v2.0";
+            options.Audience = clientId;
+
+            // Let the middleware auto-discover the issuer from OIDC metadata
+            // This ensures we use the exact issuer that's in the token
+            options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                // Don't set ValidIssuer - let it be discovered from the authority metadata
+                ValidateAudience = true,
+                ValidAudience = clientId,
+                ValidateLifetime = true,
+                NameClaimType = "name",
+            };
+
+            // Add detailed logging for debugging auth issues
+            options.Events = new JwtBearerEvents
+            {
+                OnAuthenticationFailed = context =>
+                {
+                    Log.Error("Authentication failed: {Error}", context.Exception.Message);
+                    if (context.Exception.InnerException != null)
+                    {
+                        Log.Error("Inner exception: {InnerError}", context.Exception.InnerException.Message);
+                    }
+                    return Task.CompletedTask;
+                },
+                OnTokenValidated = context =>
+                {
+                    Log.Information("Token validated for user: {User}",
+                        context.Principal?.Identity?.Name ?? "unknown");
+                    return Task.CompletedTask;
+                },
+                OnMessageReceived = context =>
+                {
+                    var hasAuth = !string.IsNullOrEmpty(context.Request.Headers.Authorization.ToString());
+                    Log.Debug("JWT message received, has Authorization header: {HasAuth}", hasAuth);
+                    return Task.CompletedTask;
+                }
+            };
+        })
+        .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
+            ApiKeyAuthenticationHandler.SchemeName, null);
 
     // Configure Authorization with scope-based policies
     builder.Services.AddAuthorizationBuilder()
@@ -98,6 +109,9 @@ try
 
     // Register authorization handler
     builder.Services.AddSingleton<IAuthorizationHandler, ApiKeyScopeHandler>();
+
+    // Register claims transformation for adding TenantId to Entra tokens
+    builder.Services.AddScoped<IClaimsTransformation, TenantClaimsTransformation>();
 
     // Configure CORS
     builder.Services.AddCors(options =>

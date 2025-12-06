@@ -288,14 +288,14 @@ namespace Email.Server.Services.Implementations
                 throw new UnauthorizedAccessException("User does not have access to this tenant");
             }
 
+            // With Entra, user info is cached in TenantMembers (no FK to AspNetUsers)
             var members = await _context.TenantMembers
                 .Where(tm => tm.TenantId == tenantId)
-                .Include(tm => tm.User)
                 .Select(tm => new TenantMemberResponse
                 {
                     UserId = tm.UserId,
-                    Email = tm.User!.Email ?? string.Empty,
-                    Name = tm.User.UserName ?? string.Empty,
+                    Email = tm.UserEmail ?? string.Empty,
+                    Name = tm.UserDisplayName ?? tm.UserEmail ?? tm.UserId,
                     Role = tm.TenantRole,
                     JoinedAtUtc = tm.JoinedAtUtc
                 })
@@ -316,24 +316,34 @@ namespace Email.Server.Services.Implementations
                 throw new UnauthorizedAccessException("Only owners and admins can add members");
             }
 
-            // Find user by email
-            var newUser = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == request.UserEmail) ?? throw new ArgumentException("User not found");
+            // With Entra External ID, we can't look up users by email in our local database
+            // Instead, we check if they already have a TenantMembers record (meaning they've logged in before)
+            var existingMemberByEmail = await _context.TenantMembers
+                .FirstOrDefaultAsync(tm => tm.UserEmail == request.UserEmail);
 
-            // Check if user is already a member
+            if (existingMemberByEmail == null)
+            {
+                // User hasn't logged in yet - we can still add them by email as a "pending invitation"
+                // They'll be linked when they first log in
+                throw new ArgumentException("User must sign in at least once before being added to a team. Ask them to log in first.");
+            }
+
+            // Check if user is already a member of this tenant
             var existingMember = await _context.TenantMembers
-                .FirstOrDefaultAsync(tm => tm.TenantId == tenantId && tm.UserId == newUser.Id);
+                .FirstOrDefaultAsync(tm => tm.TenantId == tenantId && tm.UserId == existingMemberByEmail.UserId);
 
             if (existingMember != null)
             {
                 throw new ArgumentException("User is already a member of this tenant");
             }
 
-            // Add new member
+            // Add new member using their Entra ID
             var tenantMember = new TenantMembers
             {
                 TenantId = tenantId,
-                UserId = newUser.Id,
+                UserId = existingMemberByEmail.UserId,
+                UserEmail = existingMemberByEmail.UserEmail,
+                UserDisplayName = existingMemberByEmail.UserDisplayName,
                 TenantRole = request.Role,
                 JoinedAtUtc = DateTime.UtcNow
             };
@@ -341,14 +351,14 @@ namespace Email.Server.Services.Implementations
             _context.TenantMembers.Add(tenantMember);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Added user {NewUserId} to tenant {TenantId} with role {Role}",
-                newUser.Id, tenantId, request.Role);
+            _logger.LogInformation("Added user {NewUserId} ({Email}) to tenant {TenantId} with role {Role}",
+                existingMemberByEmail.UserId, request.UserEmail, tenantId, request.Role);
 
             return new TenantMemberResponse
             {
-                UserId = newUser.Id,
-                Email = newUser.Email ?? string.Empty,
-                Name = newUser.UserName ?? string.Empty,
+                UserId = tenantMember.UserId,
+                Email = tenantMember.UserEmail ?? string.Empty,
+                Name = tenantMember.UserDisplayName ?? tenantMember.UserEmail ?? string.Empty,
                 Role = request.Role,
                 JoinedAtUtc = tenantMember.JoinedAtUtc
             };
@@ -416,8 +426,9 @@ namespace Email.Server.Services.Implementations
             }
 
             var member = await _context.TenantMembers
-                .Include(tm => tm.User)
-                .FirstOrDefaultAsync(tm => tm.TenantId == tenantId && tm.UserId == memberUserId) ?? throw new ArgumentException("Member not found in this tenant");
+                .FirstOrDefaultAsync(tm => tm.TenantId == tenantId && tm.UserId == memberUserId)
+                ?? throw new ArgumentException("Member not found in this tenant");
+
             member.TenantRole = newRole;
             await _context.SaveChangesAsync();
 
@@ -427,8 +438,8 @@ namespace Email.Server.Services.Implementations
             return new TenantMemberResponse
             {
                 UserId = member.UserId,
-                Email = member.User?.Email ?? string.Empty,
-                Name = member.User?.UserName ?? string.Empty,
+                Email = member.UserEmail ?? string.Empty,
+                Name = member.UserDisplayName ?? member.UserEmail ?? string.Empty,
                 Role = newRole,
                 JoinedAtUtc = member.JoinedAtUtc
             };

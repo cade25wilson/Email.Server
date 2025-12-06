@@ -477,16 +477,15 @@ public class BillingService : IBillingService
         var tenant = await _context.Tenants.FindAsync([tenantId], ct)
             ?? throw new ArgumentException("Tenant not found");
 
-        // Get owner's email for the Stripe customer
+        // Get owner's email for the Stripe customer (cached from Entra in TenantMembers)
         var ownerMember = await _context.TenantMembers
-            .Include(m => m.User)
             .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.TenantRole == TenantRole.Owner, ct);
 
         var customerService = new CustomerService();
         var customer = await customerService.CreateAsync(new CustomerCreateOptions
         {
             Name = tenant.Name,
-            Email = ownerMember?.User?.Email,
+            Email = ownerMember?.UserEmail,
             Metadata = new Dictionary<string, string>
             {
                 { "tenant_id", tenantId.ToString() }
