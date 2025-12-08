@@ -15,6 +15,7 @@ using Serilog;
 using Microsoft.Extensions.Azure;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Identity.Web;
+using Scalar.AspNetCore;
 
 // Configure Serilog
 var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
@@ -169,6 +170,7 @@ try
     builder.Services.AddScoped<ISystemEmailService, SystemEmailService>();
     builder.Services.AddScoped<IMessageService, MessageService>();
     builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
+    builder.Services.AddScoped<ITemplateService, TemplateService>();
     builder.Services.AddScoped<IWebhookDeliveryService, WebhookDeliveryService>();
     builder.Services.AddScoped<ISesNotificationService, SesNotificationService>();
 
@@ -204,6 +206,19 @@ try
             // Serialize enums as strings (e.g., "Owner" instead of 0)
             options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
         });
+
+    // Add OpenAPI (.NET 10 built-in)
+    builder.Services.AddOpenApi(options =>
+    {
+        options.AddDocumentTransformer((document, context, cancellationToken) =>
+        {
+            document.Info.Title = "EmailAPI";
+            document.Info.Version = "v1";
+            document.Info.Description = "Transactional email API for sending emails, managing templates, webhooks, and API keys.";
+            return Task.CompletedTask;
+        });
+    });
+
     var app = builder.Build();
 
     app.UseDefaultFiles();
@@ -217,6 +232,16 @@ try
 
     app.UseAuthentication();
     app.UseAuthorization();
+
+    // OpenAPI & Scalar UI (available in all environments for API documentation)
+    app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options
+            .WithTitle("EmailAPI")
+            .WithTheme(ScalarTheme.Mars)
+            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 
     app.MapControllers();
 

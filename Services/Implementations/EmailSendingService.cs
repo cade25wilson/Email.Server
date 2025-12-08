@@ -14,6 +14,7 @@ public class EmailSendingService : IEmailSendingService
     private readonly ITenantContextService _tenantContext;
     private readonly ISesClientService _sesClient;
     private readonly IUsageTrackingService _usageTracking;
+    private readonly ITemplateService _templateService;
     private readonly ILogger<EmailSendingService> _logger;
 
     public EmailSendingService(
@@ -21,12 +22,14 @@ public class EmailSendingService : IEmailSendingService
         ITenantContextService tenantContext,
         ISesClientService sesClient,
         IUsageTrackingService usageTracking,
+        ITemplateService templateService,
         ILogger<EmailSendingService> logger)
     {
         _context = context;
         _tenantContext = tenantContext;
         _sesClient = sesClient;
         _usageTracking = usageTracking;
+        _templateService = templateService;
         _logger = logger;
     }
 
@@ -79,10 +82,29 @@ public class EmailSendingService : IEmailSendingService
             throw new InvalidOperationException(usageCheck.DenialReason ?? "Email sending limit exceeded. Please upgrade your plan or wait for the next billing period.");
         }
 
+        // Render template if specified
+        var subject = request.Subject;
+        var htmlBody = request.HtmlBody;
+        var textBody = request.TextBody;
+
+        if (request.TemplateId.HasValue)
+        {
+            var rendered = await _templateService.RenderTemplateAsync(
+                request.TemplateId.Value,
+                request.TemplateVariables,
+                cancellationToken);
+
+            subject = rendered.Subject ?? subject;
+            htmlBody = rendered.HtmlBody ?? htmlBody;
+            textBody = rendered.TextBody ?? textBody;
+
+            _logger.LogDebug("Rendered template {TemplateId} for email", request.TemplateId.Value);
+        }
+
         // Determine if this is a scheduled send
         var isScheduled = request.ScheduledAtUtc.HasValue && request.ScheduledAtUtc.Value > DateTime.UtcNow;
 
-        // Create message entity
+        // Create message entity (store rendered content)
         var message = new Messages
         {
             TenantId = tenantId,
@@ -90,9 +112,9 @@ public class EmailSendingService : IEmailSendingService
             ConfigSetId = request.ConfigSetId,
             FromEmail = request.FromEmail,
             FromName = request.FromName,
-            Subject = request.Subject,
-            HtmlBody = request.HtmlBody,
-            TextBody = request.TextBody,
+            Subject = subject,
+            HtmlBody = htmlBody,
+            TextBody = textBody,
             TemplateId = request.TemplateId,
             Status = isScheduled ? (byte)4 : (byte)0, // 4=Scheduled, 0=Queued
             RequestedAtUtc = DateTime.UtcNow,
@@ -195,11 +217,11 @@ public class EmailSendingService : IEmailSendingService
                 {
                     Simple = new Message
                     {
-                        Subject = new Content { Data = request.Subject },
+                        Subject = new Content { Data = subject },
                         Body = new Body
                         {
-                            Html = request.HtmlBody != null ? new Content { Data = request.HtmlBody } : null,
-                            Text = request.TextBody != null ? new Content { Data = request.TextBody } : null
+                            Html = htmlBody != null ? new Content { Data = htmlBody } : null,
+                            Text = textBody != null ? new Content { Data = textBody } : null
                         }
                     }
                 }

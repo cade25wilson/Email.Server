@@ -13,15 +13,18 @@ public class UsageTrackingService : IUsageTrackingService
     private readonly ApplicationDbContext _context;
     private readonly ILogger<UsageTrackingService> _logger;
     private readonly StripeSettings _stripeSettings;
+    private readonly BillingSettings _billingSettings;
 
     public UsageTrackingService(
         ApplicationDbContext context,
         ILogger<UsageTrackingService> logger,
-        IOptions<StripeSettings> stripeSettings)
+        IOptions<StripeSettings> stripeSettings,
+        IOptions<BillingSettings> billingSettings)
     {
         _context = context;
         _logger = logger;
         _stripeSettings = stripeSettings.Value;
+        _billingSettings = billingSettings.Value;
 
         Stripe.StripeConfiguration.ApiKey = _stripeSettings.SecretKey;
     }
@@ -59,24 +62,17 @@ public class UsageTrackingService : IUsageTrackingService
             .Include(s => s.Tenant)
             .FirstOrDefaultAsync(s => s.TenantId == tenantId, ct);
 
-        // No subscription = no sending
+        // No subscription = free tier with daily limit
         if (subscription == null)
         {
-            return new UsageLimitCheckResult
-            {
-                Allowed = false,
-                DenialReason = "No active subscription found"
-            };
+            return await CheckFreeTierLimitAsync(tenantId, requestedCount, ct);
         }
 
         // Check subscription status
         if (subscription.Status is SubscriptionStatus.Canceled or SubscriptionStatus.Unpaid)
         {
-            return new UsageLimitCheckResult
-            {
-                Allowed = false,
-                DenialReason = $"Subscription is {subscription.Status}"
-            };
+            // Allow free tier for canceled/unpaid subscriptions
+            return await CheckFreeTierLimitAsync(tenantId, requestedCount, ct);
         }
 
         // Check if sending is disabled
@@ -119,6 +115,52 @@ public class UsageTrackingService : IUsageTrackingService
             CurrentUsage = currentUsage,
             IncludedLimit = includedLimit,
             RemainingIncluded = Math.Max(0, includedLimit - currentUsage)
+        };
+    }
+
+    private async Task<UsageLimitCheckResult> CheckFreeTierLimitAsync(
+        Guid tenantId,
+        int requestedCount,
+        CancellationToken ct)
+    {
+        var dailyLimit = _billingSettings.FreeTierDailyLimit;
+
+        // Get today's usage (UTC day)
+        var todayStart = DateTime.UtcNow.Date;
+        var todayEnd = todayStart.AddDays(1);
+
+        // Count emails sent today from Messages table
+        var todayUsage = await _context.Messages
+            .CountAsync(m =>
+                m.TenantId == tenantId &&
+                m.RequestedAtUtc >= todayStart &&
+                m.RequestedAtUtc < todayEnd &&
+                m.Status != 2, // Exclude failed messages
+                ct);
+
+        if (todayUsage + requestedCount > dailyLimit)
+        {
+            return new UsageLimitCheckResult
+            {
+                Allowed = false,
+                CurrentUsage = todayUsage,
+                IncludedLimit = dailyLimit,
+                RemainingIncluded = Math.Max(0, dailyLimit - todayUsage),
+                DenialReason = $"Free tier limit of {dailyLimit} emails per day reached. Subscribe to a plan for higher limits."
+            };
+        }
+
+        _logger.LogDebug(
+            "Free tier check for tenant {TenantId}: {Used}/{Limit} daily emails",
+            tenantId, todayUsage, dailyLimit);
+
+        return new UsageLimitCheckResult
+        {
+            Allowed = true,
+            IsOverage = false,
+            CurrentUsage = todayUsage,
+            IncludedLimit = dailyLimit,
+            RemainingIncluded = Math.Max(0, dailyLimit - todayUsage)
         };
     }
 

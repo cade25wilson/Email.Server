@@ -18,13 +18,16 @@
       "ignored": "true",
       "type": "identityapp"
     },
-    "storage1": {
-      "ignored": "true",
-      "type": "storage"
-    },
     "apis1": {
       "ignored": "True",
       "type": "apis"
+    },
+    "storage1": {
+      "serviceConnectorResourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('serviceConnectorResourceGroupName')]/providers/Microsoft.ServiceLinker/locations/westus2/connectors/StorageConnection_95F4B8FD05, /subscriptions/273041e8-1130-43e9-99c2-94628432d49d/resourceGroups/EmailAPI/providers/Microsoft.ServiceLinker/locations/westus2/connectors/StorageConnection_516DEDE9D0",
+      "secretStore": "LocalSecretsFile",
+      "resourceId": "/subscriptions/[parameters('subscriptionId')]/resourceGroups/[parameters('resourceGroupName')]/providers/Microsoft.Storage/storageAccounts/emaillogstorage1",
+      "type": "storage.azure",
+      "connectionId": "StorageConnection"
     }
   }
 }

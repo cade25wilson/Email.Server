@@ -46,6 +46,12 @@ public class SendEmailRequest
     public Guid? TemplateId { get; set; }
 
     /// <summary>
+    /// Variables to substitute in the template. Keys should match {{variable_name}} placeholders.
+    /// </summary>
+    [JsonPropertyName("template_variables")]
+    public Dictionary<string, string>? TemplateVariables { get; set; }
+
+    /// <summary>
     /// Optional: Schedule the email to be sent at a future time (UTC).
     /// If not provided, email is sent immediately.
     /// </summary>
