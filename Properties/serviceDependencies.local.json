@@ -14,6 +14,14 @@
       "type": "mssql",
       "connectionId": "ConnectionStrings:DefaultConnection"
     },
+    "identityapp1": {
+      "ignored": "true",
+      "type": "identityapp"
+    },
+    "storage1": {
+      "ignored": "true",
+      "type": "storage"
+    },
     "apis1": {
       "ignored": "True",
       "type": "apis"
