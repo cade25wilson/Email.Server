@@ -78,4 +78,14 @@ public interface IWebhookDeliveryService
     /// Gets the list of available event types.
     /// </summary>
     IEnumerable<WebhookEventTypeResponse> GetAvailableEventTypes();
+
+    /// <summary>
+    /// Queues webhook delivery for a custom event (like inbound email).
+    /// Delivers immediately to all matching endpoints without using MessageEvents.
+    /// </summary>
+    Task QueueWebhookDeliveryAsync(
+        Guid tenantId,
+        string eventType,
+        string payloadJson,
+        CancellationToken cancellationToken = default);
 }

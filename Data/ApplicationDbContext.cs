@@ -222,7 +222,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasOne(a => a.Domain)
                 .WithMany()
                 .HasForeignKey(a => a.DomainId)
-                .OnDelete(DeleteBehavior.NoAction); // NoAction to avoid cascade cycle with Tenant
+                .OnDelete(DeleteBehavior.NoAction); // Manual cleanup in DomainManagementService
         });
 
         // Messages
@@ -370,11 +370,17 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.ToTable("InboundMessages");
             entity.Property(i => i.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
             entity.HasIndex(i => new { i.TenantId, i.ReceivedAtUtc }).HasDatabaseName("IX_InboundMessages_Tenant_Time");
+            entity.HasIndex(i => i.DomainId).HasDatabaseName("IX_InboundMessages_DomainId");
 
             entity.HasOne(i => i.Tenant)
                 .WithMany()
                 .HasForeignKey(i => i.TenantId)
                 .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(i => i.Domain)
+                .WithMany()
+                .HasForeignKey(i => i.DomainId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasOne(i => i.RegionCatalog)
                 .WithMany()

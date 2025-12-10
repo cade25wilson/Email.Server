@@ -4,50 +4,63 @@ using Email.Server.Services.Interfaces;
 
 namespace Email.Server.Services.Implementations;
 
-public class AttachmentStorageService : IAttachmentStorageService
+public class InboundEmailStorageService : IInboundEmailStorageService
 {
     private readonly IAmazonS3 _s3Client;
-    private readonly ILogger<AttachmentStorageService> _logger;
+    private readonly ILogger<InboundEmailStorageService> _logger;
     private readonly string _bucketName;
     private static readonly TimeSpan PresignedUrlExpiry = TimeSpan.FromHours(1);
 
-    public AttachmentStorageService(
+    public InboundEmailStorageService(
         IAmazonS3 s3Client,
         IConfiguration configuration,
-        ILogger<AttachmentStorageService> logger)
+        ILogger<InboundEmailStorageService> logger)
     {
         _s3Client = s3Client;
         _logger = logger;
-        _bucketName = configuration["S3:AttachmentsBucket"]
-            ?? throw new InvalidOperationException("S3:AttachmentsBucket configuration is required");
+        _bucketName = configuration["S3:InboundEmailsBucket"]
+            ?? throw new InvalidOperationException("S3:InboundEmailsBucket configuration is required");
     }
 
-    public async Task<string> UploadAttachmentAsync(
+    public async Task<string> StoreEmailAsync(
         Guid tenantId,
         Guid messageId,
-        string fileName,
-        string contentType,
-        Stream stream,
+        Stream content,
         CancellationToken cancellationToken = default)
     {
-        // Organize by tenant/message for easy cleanup
-        var s3Key = $"attachments/{tenantId}/{messageId}/{Guid.NewGuid()}/{fileName}";
+        // Organize by tenant/year/month for easy management
+        var now = DateTime.UtcNow;
+        var s3Key = $"inbound/{tenantId}/{now:yyyy}/{now:MM}/{messageId}.eml";
 
         var request = new PutObjectRequest
         {
             BucketName = _bucketName,
             Key = s3Key,
-            InputStream = stream,
-            ContentType = contentType
+            InputStream = content,
+            ContentType = "message/rfc822"
         };
 
         await _s3Client.PutObjectAsync(request, cancellationToken);
 
         _logger.LogInformation(
-            "Uploaded attachment {FileName} for message {MessageId}, key {S3Key}",
-            fileName, messageId, s3Key);
+            "Stored inbound email {MessageId} for tenant {TenantId}, key {S3Key}",
+            messageId, tenantId, s3Key);
 
         return s3Key;
+    }
+
+    public async Task<Stream> GetEmailAsync(
+        string s3Key,
+        CancellationToken cancellationToken = default)
+    {
+        var request = new GetObjectRequest
+        {
+            BucketName = _bucketName,
+            Key = s3Key
+        };
+
+        var response = await _s3Client.GetObjectAsync(request, cancellationToken);
+        return response.ResponseStream;
     }
 
     public Task<(string Url, DateTime ExpiresAt)> GetSignedDownloadUrlAsync(
@@ -69,7 +82,9 @@ public class AttachmentStorageService : IAttachmentStorageService
         return Task.FromResult((url, expiresAt));
     }
 
-    public async Task DeleteAttachmentAsync(string s3Key, CancellationToken cancellationToken = default)
+    public async Task DeleteEmailAsync(
+        string s3Key,
+        CancellationToken cancellationToken = default)
     {
         var request = new DeleteObjectRequest
         {
@@ -79,6 +94,6 @@ public class AttachmentStorageService : IAttachmentStorageService
 
         await _s3Client.DeleteObjectAsync(request, cancellationToken);
 
-        _logger.LogInformation("Deleted attachment {S3Key}", s3Key);
+        _logger.LogInformation("Deleted inbound email {S3Key}", s3Key);
     }
 }

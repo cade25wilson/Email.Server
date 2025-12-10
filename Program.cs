@@ -1,5 +1,5 @@
 using System.Threading.RateLimiting;
-using Azure.Storage.Blobs;
+using Amazon.S3;
 using Email.Server.Authentication;
 using Email.Server.Configuration;
 using Email.Server.Data;
@@ -13,7 +13,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
-using Microsoft.Extensions.Azure;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Identity.Web;
 using Scalar.AspNetCore;
@@ -179,13 +178,19 @@ try
     builder.Services.AddScoped<IWebhookDeliveryService, WebhookDeliveryService>();
     builder.Services.AddScoped<ISesNotificationService, SesNotificationService>();
 
-    // Azure Blob Storage for email attachments
-    var azureStorageConnectionString = builder.Configuration["AzureStorage:ConnectionString"];
-    if (!string.IsNullOrEmpty(azureStorageConnectionString))
+    // AWS S3 for email attachments and inbound emails
+    builder.Services.AddSingleton<IAmazonS3>(sp =>
     {
-        builder.Services.AddSingleton(new BlobServiceClient(azureStorageConnectionString));
-        builder.Services.AddScoped<IAttachmentStorageService, AttachmentStorageService>();
-    }
+        var config = new AmazonS3Config
+        {
+            RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(
+                builder.Configuration["AWS:Region"] ?? "us-west-2")
+        };
+        return new AmazonS3Client(config);
+    });
+    builder.Services.AddScoped<IAttachmentStorageService, AttachmentStorageService>();
+    builder.Services.AddScoped<IInboundEmailStorageService, InboundEmailStorageService>();
+    builder.Services.AddScoped<IInboundEmailService, InboundEmailService>();
 
     // Billing Services
     builder.Services.AddScoped<IBillingService, BillingService>();

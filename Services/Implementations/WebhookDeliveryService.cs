@@ -27,7 +27,8 @@ public class WebhookDeliveryService(
         new() { Name = "email.opened", Description = "Email was opened (requires tracking)" },
         new() { Name = "email.clicked", Description = "Link in email was clicked (requires tracking)" },
         new() { Name = "email.rejected", Description = "SES rejected the email" },
-        new() { Name = "email.rendering_failed", Description = "Template rendering failed" }
+        new() { Name = "email.rendering_failed", Description = "Template rendering failed" },
+        new() { Name = "email.inbound", Description = "Inbound email received" }
     ];
 
     // Retry intervals in minutes: 1, 5, 15, 60, 240 (4 hours)
@@ -499,5 +500,60 @@ public class WebhookDeliveryService(
             ResponseStatusCode = delivery.ResponseStatusCode,
             NextRetryAtUtc = delivery.NextRetryAtUtc
         };
+    }
+
+    public async Task QueueWebhookDeliveryAsync(
+        Guid tenantId,
+        string eventType,
+        string payloadJson,
+        CancellationToken cancellationToken = default)
+    {
+        // Find all enabled endpoints for this tenant that subscribe to this event type
+        var endpoints = await _context.WebhookEndpoints
+            .Where(e => e.TenantId == tenantId && e.Enabled)
+            .ToListAsync(cancellationToken);
+
+        var matchingEndpoints = endpoints
+            .Where(e => !string.IsNullOrEmpty(e.EventTypes) &&
+                        e.EventTypes.Split(',').Contains(eventType))
+            .ToList();
+
+        if (matchingEndpoints.Count == 0)
+        {
+            _logger.LogDebug("No webhook endpoints configured for event type {EventType} in tenant {TenantId}",
+                eventType, tenantId);
+            return;
+        }
+
+        _logger.LogInformation("Delivering {EventType} webhook to {Count} endpoints for tenant {TenantId}",
+            eventType, matchingEndpoints.Count, tenantId);
+
+        // Deliver to each endpoint immediately (fire and forget style, but log failures)
+        var payload = JsonSerializer.Deserialize<object>(payloadJson);
+        foreach (var endpoint in matchingEndpoints)
+        {
+            try
+            {
+                var (success, statusCode, errorMessage) = await DeliverWebhookAsync(
+                    endpoint.Url,
+                    endpoint.Secret,
+                    payload!,
+                    cancellationToken);
+
+                if (success)
+                {
+                    _logger.LogInformation("Webhook delivered to {Url} for {EventType}", endpoint.Url, eventType);
+                }
+                else
+                {
+                    _logger.LogWarning("Webhook delivery failed to {Url}: {StatusCode} - {Error}",
+                        endpoint.Url, statusCode, errorMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Exception delivering webhook to {Url}", endpoint.Url);
+            }
+        }
     }
 }

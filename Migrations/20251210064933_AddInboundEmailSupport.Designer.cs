@@ -4,6 +4,7 @@ using Email.Server.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Email.Server.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251210064933_AddInboundEmailSupport")]
+    partial class AddInboundEmailSupport
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -32,7 +35,7 @@ namespace Email.Server.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid?>("DomainId")
+                    b.Property<Guid>("DomainId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsRevoked")
@@ -862,7 +865,7 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "us-east-1",
-                            CreatedAtUtc = new DateTime(2025, 12, 10, 7, 39, 52, 443, DateTimeKind.Utc).AddTicks(5910),
+                            CreatedAtUtc = new DateTime(2025, 12, 10, 6, 49, 32, 283, DateTimeKind.Utc).AddTicks(924),
                             DefaultForNewTenants = false,
                             DisplayName = "US East (N. Virginia)",
                             ReceiveSupported = true,
@@ -871,7 +874,7 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "us-west-2",
-                            CreatedAtUtc = new DateTime(2025, 12, 10, 7, 39, 52, 444, DateTimeKind.Utc).AddTicks(158),
+                            CreatedAtUtc = new DateTime(2025, 12, 10, 6, 49, 32, 283, DateTimeKind.Utc).AddTicks(4212),
                             DefaultForNewTenants = true,
                             DisplayName = "US West (Oregon)",
                             ReceiveSupported = true,
@@ -880,7 +883,7 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "eu-west-1",
-                            CreatedAtUtc = new DateTime(2025, 12, 10, 7, 39, 52, 444, DateTimeKind.Utc).AddTicks(164),
+                            CreatedAtUtc = new DateTime(2025, 12, 10, 6, 49, 32, 283, DateTimeKind.Utc).AddTicks(4216),
                             DefaultForNewTenants = false,
                             DisplayName = "EU (Ireland)",
                             ReceiveSupported = true,
@@ -889,7 +892,7 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "ap-southeast-2",
-                            CreatedAtUtc = new DateTime(2025, 12, 10, 7, 39, 52, 444, DateTimeKind.Utc).AddTicks(167),
+                            CreatedAtUtc = new DateTime(2025, 12, 10, 6, 49, 32, 283, DateTimeKind.Utc).AddTicks(4218),
                             DefaultForNewTenants = false,
                             DisplayName = "APAC (Sydney)",
                             ReceiveSupported = true,
@@ -1510,7 +1513,8 @@ namespace Email.Server.Migrations
                     b.HasOne("Email.Server.Models.Domains", "Domain")
                         .WithMany()
                         .HasForeignKey("DomainId")
-                        .OnDelete(DeleteBehavior.NoAction);
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
 
                     b.HasOne("Email.Server.Models.Tenants", "Tenant")
                         .WithMany()

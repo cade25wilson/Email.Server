@@ -25,8 +25,8 @@ public class ApiKeyValidationResult
 {
     public Guid KeyId { get; set; }
     public Guid TenantId { get; set; }
-    public Guid DomainId { get; set; }
-    public required string DomainName { get; set; }
+    public Guid? DomainId { get; set; }
+    public string? DomainName { get; set; }
     public required List<string> Scopes { get; set; }
 }
 
@@ -36,8 +36,8 @@ public class ApiKeyListItem
     public required string Name { get; set; }
     public required string KeyPreview { get; set; }
     public required List<string> Scopes { get; set; }
-    public Guid DomainId { get; set; }
-    public required string DomainName { get; set; }
+    public Guid? DomainId { get; set; }
+    public string? DomainName { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? LastUsedAtUtc { get; set; }
     public bool IsRevoked { get; set; }

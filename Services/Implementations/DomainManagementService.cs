@@ -166,6 +166,24 @@ public class DomainManagementService : IDomainManagementService
             };
             _context.DomainDnsRecords.Add(dmarcRecord);
 
+            // Add MX record for inbound email if region supports receiving
+            var regionCatalog = await _context.RegionsCatalog
+                .FirstOrDefaultAsync(r => r.Region == request.Region, cancellationToken);
+
+            if (regionCatalog?.ReceiveSupported == true)
+            {
+                var mxRecord = new DomainDnsRecords
+                {
+                    DomainId = domain.Id,
+                    RecordType = "MX",
+                    Host = request.Domain,
+                    Value = $"10 inbound-smtp.{request.Region}.amazonaws.com",
+                    Required = false, // Optional - only needed if user wants to receive emails
+                    Status = 0 // Unknown
+                };
+                _context.DomainDnsRecords.Add(mxRecord);
+            }
+
             await _context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 
@@ -322,10 +340,76 @@ public class DomainManagementService : IDomainManagementService
             _logger.LogWarning(ex, "Error deleting domain from SES, continuing with database deletion");
         }
 
-        // Delete from database (cascades to DNS records)
-        _context.Domains.Remove(domain);
-        await _context.SaveChangesAsync(cancellationToken);
+        // Delete API keys and domain in a transaction
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await _context.ApiKeys
+                .Where(a => a.DomainId == domainId)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            _context.Domains.Remove(domain);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
 
         _logger.LogInformation("Deleted domain {Domain} for tenant {TenantId}", domain.Domain, tenantId);
+    }
+
+    public async Task<DomainResponse> EnableInboundAsync(Guid domainId, CancellationToken cancellationToken = default)
+    {
+        var tenantId = _tenantContext.GetTenantId();
+
+        var domain = await _context.Domains
+            .Include(d => d.RegionCatalog)
+            .FirstOrDefaultAsync(d => d.Id == domainId && d.TenantId == tenantId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Domain {domainId} not found");
+
+        // Check if domain is verified
+        if (domain.VerificationStatus != 1)
+        {
+            throw new InvalidOperationException("Domain must be verified before enabling inbound email");
+        }
+
+        // Check if region supports receiving
+        if (domain.RegionCatalog?.ReceiveSupported != true)
+        {
+            throw new InvalidOperationException($"Region {domain.Region} does not support receiving emails");
+        }
+
+        // Enable inbound
+        domain.InboundEnabled = true;
+        domain.InboundStatus = 1; // Pending - MX record needs to be configured
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Enabled inbound email for domain {Domain}", domain.Domain);
+
+        return await GetDomainAsync(domainId, cancellationToken);
+    }
+
+    public async Task<DomainResponse> DisableInboundAsync(Guid domainId, CancellationToken cancellationToken = default)
+    {
+        var tenantId = _tenantContext.GetTenantId();
+
+        var domain = await _context.Domains
+            .FirstOrDefaultAsync(d => d.Id == domainId && d.TenantId == tenantId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Domain {domainId} not found");
+
+        // Disable inbound
+        domain.InboundEnabled = false;
+        domain.InboundStatus = 0; // Off
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Disabled inbound email for domain {Domain}", domain.Domain);
+
+        return await GetDomainAsync(domainId, cancellationToken);
     }
 }

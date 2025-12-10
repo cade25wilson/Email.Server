@@ -11,6 +11,9 @@ public class InboundMessages
     [ForeignKey("Tenant")]
     public Guid TenantId { get; set; }
 
+    [ForeignKey("Domain")]
+    public Guid? DomainId { get; set; }
+
     [ForeignKey("RegionCatalog")]
     [MaxLength(32)]
     public required string Region { get; set; }
@@ -27,11 +30,19 @@ public class InboundMessages
     public DateTime ReceivedAtUtc { get; set; }
 
     [MaxLength(1024)]
-    public required string S3ObjectKey { get; set; } // raw MIME in S3
+    public required string BlobKey { get; set; } // raw MIME in Azure Blob Storage
+
+    [MaxLength(256)]
+    public string? SesMessageId { get; set; }
+
+    public long? SizeBytes { get; set; }
 
     public string? ParsedJson { get; set; } // optional parsed metadata
 
+    public DateTime? ProcessedAtUtc { get; set; }
+
     // Navigation properties
     public Tenants? Tenant { get; set; }
+    public Domains? Domain { get; set; }
     public RegionsCatalog? RegionCatalog { get; set; }
 }

@@ -50,6 +50,20 @@ public class DomainResponse
     [JsonPropertyName("verified_at_utc")]
     public DateTime? VerifiedAtUtc { get; set; }
 
+    [JsonPropertyName("inbound_enabled")]
+    public bool InboundEnabled { get; set; }
+
+    [JsonPropertyName("inbound_status")]
+    public byte InboundStatus { get; set; } // 0=Off, 1=Pending, 2=Active
+
+    [JsonPropertyName("inbound_status_text")]
+    public string InboundStatusText => InboundStatus switch
+    {
+        1 => "Pending",
+        2 => "Active",
+        _ => "Off"
+    };
+
     [JsonPropertyName("dns_records")]
     public List<DnsRecordResponse> DnsRecords { get; set; } = new();
 }

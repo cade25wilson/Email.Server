@@ -36,6 +36,11 @@ public class Domains
 
     public DateTime? VerifiedAtUtc { get; set; }
 
+    // Inbound email settings
+    public bool InboundEnabled { get; set; } = false;
+
+    public byte InboundStatus { get; set; } = 0; // 0=Off, 1=Pending, 2=Active
+
     // Navigation properties
     public Tenants? Tenant { get; set; }
     public RegionsCatalog? RegionCatalog { get; set; }

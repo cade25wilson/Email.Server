@@ -10,4 +10,6 @@ public interface IDomainManagementService
     Task<IEnumerable<DomainResponse>> GetDomainsAsync(CancellationToken cancellationToken = default);
     Task<DomainResponse> VerifyDomainAsync(Guid domainId, CancellationToken cancellationToken = default);
     Task DeleteDomainAsync(Guid domainId, CancellationToken cancellationToken = default);
+    Task<DomainResponse> EnableInboundAsync(Guid domainId, CancellationToken cancellationToken = default);
+    Task<DomainResponse> DisableInboundAsync(Guid domainId, CancellationToken cancellationToken = default);
 }

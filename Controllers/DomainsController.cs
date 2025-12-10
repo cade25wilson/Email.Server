@@ -107,4 +107,48 @@ public class DomainsController(IDomainManagementService domainService, ILogger<D
             return StatusCode(500, new { error = "An error occurred while deleting the domain" });
         }
     }
+
+    [HttpPost("{id}/inbound/enable")]
+    [Authorize(Policy = "domains:write")]
+    public async Task<IActionResult> EnableInbound(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var domain = await _domainService.EnableInboundAsync(id, cancellationToken);
+            return Ok(domain);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error enabling inbound for domain {DomainId}", id);
+            return StatusCode(500, new { error = "An error occurred while enabling inbound email" });
+        }
+    }
+
+    [HttpPost("{id}/inbound/disable")]
+    [Authorize(Policy = "domains:write")]
+    public async Task<IActionResult> DisableInbound(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var domain = await _domainService.DisableInboundAsync(id, cancellationToken);
+            return Ok(domain);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error disabling inbound for domain {DomainId}", id);
+            return StatusCode(500, new { error = "An error occurred while disabling inbound email" });
+        }
+    }
 }

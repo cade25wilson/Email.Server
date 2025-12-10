@@ -20,10 +20,10 @@ public class CreateApiKeyResponse
     public required List<string> Scopes { get; set; }
 
     [JsonPropertyName("domain_id")]
-    public Guid DomainId { get; set; }
+    public Guid? DomainId { get; set; }
 
     [JsonPropertyName("domain_name")]
-    public required string DomainName { get; set; }
+    public string? DomainName { get; set; }
 
     [JsonPropertyName("created_at_utc")]
     public DateTime CreatedAtUtc { get; set; }
@@ -44,10 +44,10 @@ public class ApiKeyListItemResponse
     public required List<string> Scopes { get; set; }
 
     [JsonPropertyName("domain_id")]
-    public Guid DomainId { get; set; }
+    public Guid? DomainId { get; set; }
 
     [JsonPropertyName("domain_name")]
-    public required string DomainName { get; set; }
+    public string? DomainName { get; set; }
 
     [JsonPropertyName("created_at_utc")]
     public DateTime CreatedAtUtc { get; set; }
