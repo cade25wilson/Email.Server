@@ -90,7 +90,7 @@ public class BillingService : IBillingService
                 new SessionLineItemOptions
                 {
                     Price = plan.StripePriceId,
-                    Quantity = 1
+                    Quantity = 1  // Base flat fee price
                 }
             ],
             SubscriptionData = new SessionSubscriptionDataOptions
@@ -127,7 +127,7 @@ public class BillingService : IBillingService
         return new CheckoutSessionResponse
         {
             SessionId = session.Id,
-            Url = session.Url
+            CheckoutUrl = session.Url
         };
     }
 
@@ -155,7 +155,7 @@ public class BillingService : IBillingService
 
         return new CustomerPortalResponse
         {
-            Url = session.Url
+            PortalUrl = session.Url
         };
     }
 
@@ -335,16 +335,18 @@ public class BillingService : IBillingService
 
         if (subscription == null)
         {
+            var defaultEnd = DateTime.UtcNow.Date.AddMonths(1);
             return new UsageSummaryResponse
             {
-                PeriodStart = DateTime.UtcNow.Date,
-                PeriodEnd = DateTime.UtcNow.Date.AddMonths(1),
+                CurrentPeriodStart = DateTime.UtcNow.Date,
+                CurrentPeriodEnd = defaultEnd,
                 EmailsSent = 0,
-                IncludedEmailsLimit = 0,
+                EmailsIncluded = 0,
+                EmailsRemaining = 0,
                 OverageEmails = 0,
-                RemainingIncluded = 0,
                 UsagePercentage = 0,
                 EstimatedOverageCostCents = 0,
+                DaysRemainingInPeriod = (defaultEnd - DateTime.UtcNow.Date).Days,
                 IsCurrentPeriod = true
             };
         }
@@ -357,16 +359,19 @@ public class BillingService : IBillingService
 
         if (currentPeriod == null)
         {
+            var includedEmails = subscription.BillingPlan?.IncludedEmails ?? 0;
+            var daysRemaining = Math.Max(0, (subscription.CurrentPeriodEnd - DateTime.UtcNow).Days);
             return new UsageSummaryResponse
             {
-                PeriodStart = subscription.CurrentPeriodStart,
-                PeriodEnd = subscription.CurrentPeriodEnd,
+                CurrentPeriodStart = subscription.CurrentPeriodStart,
+                CurrentPeriodEnd = subscription.CurrentPeriodEnd,
                 EmailsSent = 0,
-                IncludedEmailsLimit = subscription.BillingPlan?.IncludedEmails ?? 0,
+                EmailsIncluded = includedEmails,
+                EmailsRemaining = includedEmails,
                 OverageEmails = 0,
-                RemainingIncluded = subscription.BillingPlan?.IncludedEmails ?? 0,
                 UsagePercentage = 0,
                 EstimatedOverageCostCents = 0,
+                DaysRemainingInPeriod = daysRemaining,
                 IsCurrentPeriod = true
             };
         }
@@ -378,18 +383,20 @@ public class BillingService : IBillingService
         var overageCost = subscription.BillingPlan != null
             ? (int)(currentPeriod.OverageEmails / 1000m * subscription.BillingPlan.OverageRateCentsPer1K)
             : 0;
+        var periodDaysRemaining = Math.Max(0, (currentPeriod.PeriodEnd - DateTime.UtcNow).Days);
 
         return new UsageSummaryResponse
         {
             PeriodId = currentPeriod.Id,
-            PeriodStart = currentPeriod.PeriodStart,
-            PeriodEnd = currentPeriod.PeriodEnd,
+            CurrentPeriodStart = currentPeriod.PeriodStart,
+            CurrentPeriodEnd = currentPeriod.PeriodEnd,
             EmailsSent = currentPeriod.EmailsSent,
-            IncludedEmailsLimit = currentPeriod.IncludedEmailsLimit,
+            EmailsIncluded = currentPeriod.IncludedEmailsLimit,
+            EmailsRemaining = remainingIncluded,
             OverageEmails = currentPeriod.OverageEmails,
-            RemainingIncluded = remainingIncluded,
             UsagePercentage = Math.Min(100, usagePercentage),
             EstimatedOverageCostCents = overageCost,
+            DaysRemainingInPeriod = periodDaysRemaining,
             IsCurrentPeriod = true
         };
     }
@@ -417,19 +424,22 @@ public class BillingService : IBillingService
             var overageCost = p.Subscription?.BillingPlan != null
                 ? (int)(p.OverageEmails / 1000m * p.Subscription.BillingPlan.OverageRateCentsPer1K)
                 : 0;
+            var isCurrentPeriod = p.PeriodStart <= DateTime.UtcNow && p.PeriodEnd > DateTime.UtcNow;
+            var daysRemaining = isCurrentPeriod ? Math.Max(0, (p.PeriodEnd - DateTime.UtcNow).Days) : 0;
 
             return new UsageSummaryResponse
             {
                 PeriodId = p.Id,
-                PeriodStart = p.PeriodStart,
-                PeriodEnd = p.PeriodEnd,
+                CurrentPeriodStart = p.PeriodStart,
+                CurrentPeriodEnd = p.PeriodEnd,
                 EmailsSent = p.EmailsSent,
-                IncludedEmailsLimit = p.IncludedEmailsLimit,
+                EmailsIncluded = p.IncludedEmailsLimit,
+                EmailsRemaining = remainingIncluded,
                 OverageEmails = p.OverageEmails,
-                RemainingIncluded = remainingIncluded,
                 UsagePercentage = Math.Min(100, usagePercentage),
                 EstimatedOverageCostCents = overageCost,
-                IsCurrentPeriod = p.PeriodStart <= DateTime.UtcNow && p.PeriodEnd > DateTime.UtcNow
+                DaysRemainingInPeriod = daysRemaining,
+                IsCurrentPeriod = isCurrentPeriod
             };
         });
     }

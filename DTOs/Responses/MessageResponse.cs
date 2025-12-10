@@ -28,8 +28,13 @@ public class MessageResponse
         1 => "Sent",
         2 => "Failed",
         3 => "Partial",
+        4 => "Scheduled",
+        5 => "Cancelled",
         _ => "Queued"
     };
+
+    [JsonPropertyName("scheduled_at_utc")]
+    public DateTime? ScheduledAtUtc { get; set; }
 
     [JsonPropertyName("requested_at_utc")]
     public DateTime RequestedAtUtc { get; set; }

@@ -9,21 +9,14 @@ namespace Email.Server.Controllers;
 [ApiController]
 [Route("api/v1/[controller]")]
 [Authorize] // JWT only - managing API keys requires user authentication
-public class ApiKeysController : ControllerBase
+public class ApiKeysController(
+    IApiKeyService apiKeyService,
+    ITenantContextService tenantContext,
+    ILogger<ApiKeysController> logger) : ControllerBase
 {
-    private readonly IApiKeyService _apiKeyService;
-    private readonly ITenantContextService _tenantContext;
-    private readonly ILogger<ApiKeysController> _logger;
-
-    public ApiKeysController(
-        IApiKeyService apiKeyService,
-        ITenantContextService tenantContext,
-        ILogger<ApiKeysController> logger)
-    {
-        _apiKeyService = apiKeyService;
-        _tenantContext = tenantContext;
-        _logger = logger;
-    }
+    private readonly IApiKeyService _apiKeyService = apiKeyService;
+    private readonly ITenantContextService _tenantContext = tenantContext;
+    private readonly ILogger<ApiKeysController> _logger = logger;
 
     /// <summary>
     /// Create a new API key for the current tenant

@@ -287,6 +287,67 @@ public class EmailSendingService : IEmailSendingService
         };
     }
 
+    public async Task<BatchEmailResponse> SendBatchEmailsAsync(SendBatchEmailRequest request, CancellationToken cancellationToken = default)
+    {
+        if (request.Emails == null || request.Emails.Count == 0)
+        {
+            throw new ArgumentException("At least one email is required");
+        }
+
+        if (request.Emails.Count > 100)
+        {
+            throw new ArgumentException("Maximum 100 emails per batch");
+        }
+
+        var response = new BatchEmailResponse
+        {
+            Total = request.Emails.Count
+        };
+
+        var results = new List<BatchEmailItemResult>();
+        var semaphore = new SemaphoreSlim(10); // Max 10 concurrent sends
+
+        var tasks = request.Emails.Select(async (email, index) =>
+        {
+            await semaphore.WaitAsync(cancellationToken);
+            try
+            {
+                var sendResponse = await SendEmailAsync(email, cancellationToken);
+                return new BatchEmailItemResult
+                {
+                    Index = index,
+                    Success = sendResponse.Status != 2, // Not failed
+                    MessageId = sendResponse.MessageId,
+                    Error = sendResponse.Error
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send email at index {Index}", index);
+                return new BatchEmailItemResult
+                {
+                    Index = index,
+                    Success = false,
+                    Error = ex.Message
+                };
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+
+        results = (await Task.WhenAll(tasks)).ToList();
+
+        response.Results = results.OrderBy(r => r.Index).ToList();
+        response.Succeeded = results.Count(r => r.Success);
+        response.Failed = results.Count(r => !r.Success);
+
+        _logger.LogInformation("Batch send completed: {Succeeded}/{Total} succeeded", response.Succeeded, response.Total);
+
+        return response;
+    }
+
     public async Task<DTOs.Responses.SendEmailResponse> SendScheduledMessageAsync(Guid messageId, CancellationToken cancellationToken = default)
     {
         // Load the scheduled message with recipients

@@ -27,7 +27,7 @@ public class EntraAuthController(
     /// This should be called by the frontend after Entra authentication
     /// </summary>
     [HttpPost("initialize")]
-    public async Task<IActionResult> InitializeUser()
+    public async Task<IActionResult> InitializeUser([FromBody] InitializeUserRequest? request = null)
     {
         // Log all claims for debugging
         _logger.LogInformation("Initialize called. User authenticated: {IsAuth}", User.Identity?.IsAuthenticated);
@@ -78,12 +78,24 @@ public class EntraAuthController(
 
             _logger.LogInformation("User {UserId} already has {Count} tenant(s)", userId, userTenants.Count);
 
+            // Use preferred tenant if provided and user has access to it
+            var selectedTenantId = existingMembership.TenantId;
+            if (request?.PreferredTenantId.HasValue == true)
+            {
+                var preferredTenant = userTenants.FirstOrDefault(t => t.Id == request.PreferredTenantId.Value);
+                if (preferredTenant != null)
+                {
+                    selectedTenantId = preferredTenant.Id;
+                    _logger.LogInformation("Using preferred tenant {TenantId} for user {UserId}", selectedTenantId, userId);
+                }
+            }
+
             return Ok(new InitializeUserResponse
             {
                 UserId = userId,
                 Email = email,
                 Name = name,
-                TenantId = existingMembership.TenantId,
+                TenantId = selectedTenantId,
                 IsNewUser = false,
                 AvailableTenants = userTenants
             });
@@ -223,6 +235,11 @@ public class InitializeUserResponse
     public Guid TenantId { get; set; }
     public bool IsNewUser { get; set; }
     public required List<TenantInfo> AvailableTenants { get; set; }
+}
+
+public class InitializeUserRequest
+{
+    public Guid? PreferredTenantId { get; set; }
 }
 
 // TenantInfo and SwitchTenantRequest are defined in Email.Server.Models.AuthModels

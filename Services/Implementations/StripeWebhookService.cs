@@ -221,6 +221,9 @@ public class StripeWebhookService : IStripeWebhookService
         _context.TenantSubscriptions.Add(tenantSubscription);
         await _context.SaveChangesAsync(ct);
 
+        // Create or update usage period for the new subscription
+        await CreateOrUpdateUsagePeriodForSubscriptionAsync(tenantSubscription, planId.Value, ct);
+
         _logger.LogInformation(
             "Created subscription {SubscriptionId} for tenant {TenantId}",
             subscription.Id, tenantId);
@@ -255,6 +258,9 @@ public class StripeWebhookService : IStripeWebhookService
         }
 
         await UpdateLocalSubscriptionAsync(existingSubscription, subscription, planId, ct);
+
+        // Update usage period if plan changed
+        await CreateOrUpdateUsagePeriodForSubscriptionAsync(existingSubscription, planId, ct);
     }
 
     private async Task UpdateLocalSubscriptionAsync(
@@ -522,5 +528,66 @@ public class StripeWebhookService : IStripeWebhookService
             "uncollectible" => InvoiceStatus.Uncollectible,
             _ => InvoiceStatus.Draft
         };
+    }
+
+    private async Task CreateOrUpdateUsagePeriodForSubscriptionAsync(
+        TenantSubscriptions subscription,
+        Guid planId,
+        CancellationToken ct)
+    {
+        var plan = await _context.BillingPlans.FindAsync([planId], ct);
+        if (plan == null)
+        {
+            _logger.LogWarning("Plan {PlanId} not found when creating usage period", planId);
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+
+        // Find existing period that overlaps with the subscription period
+        var existingPeriod = await _context.UsagePeriods
+            .FirstOrDefaultAsync(p =>
+                p.TenantId == subscription.TenantId &&
+                p.PeriodStart <= now &&
+                p.PeriodEnd > now, ct);
+
+        if (existingPeriod != null)
+        {
+            // Update existing period with correct subscription info and limits
+            existingPeriod.SubscriptionId = subscription.Id;
+            existingPeriod.PeriodStart = subscription.CurrentPeriodStart;
+            existingPeriod.PeriodEnd = subscription.CurrentPeriodEnd;
+            existingPeriod.IncludedEmailsLimit = plan.IncludedEmails;
+
+            // Recalculate overage based on new limit
+            existingPeriod.OverageEmails = Math.Max(0, existingPeriod.EmailsSent - plan.IncludedEmails);
+
+            _logger.LogInformation(
+                "Updated usage period {PeriodId} for tenant {TenantId} with limit {Limit}",
+                existingPeriod.Id, subscription.TenantId, plan.IncludedEmails);
+        }
+        else
+        {
+            // Create new period
+            var newPeriod = new UsagePeriods
+            {
+                TenantId = subscription.TenantId,
+                SubscriptionId = subscription.Id,
+                PeriodStart = subscription.CurrentPeriodStart,
+                PeriodEnd = subscription.CurrentPeriodEnd,
+                EmailsSent = 0,
+                IncludedEmailsLimit = plan.IncludedEmails,
+                OverageEmails = 0,
+                OverageReportedToStripe = 0
+            };
+
+            _context.UsagePeriods.Add(newPeriod);
+
+            _logger.LogInformation(
+                "Created usage period for tenant {TenantId} with limit {Limit}",
+                subscription.TenantId, plan.IncludedEmails);
+        }
+
+        await _context.SaveChangesAsync(ct);
     }
 }

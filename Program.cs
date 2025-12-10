@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using Azure.Storage.Blobs;
 using Email.Server.Authentication;
 using Email.Server.Configuration;
 using Email.Server.Data;
@@ -113,6 +114,10 @@ try
     builder.Services.AddAuthorizationBuilder()
         .AddPolicy(ApiKeyScopes.EmailsSend, policy =>
             policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.EmailsSend)))
+        .AddPolicy(ApiKeyScopes.EmailsRead, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.EmailsRead)))
+        .AddPolicy(ApiKeyScopes.EmailsWrite, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.EmailsWrite)))
         .AddPolicy(ApiKeyScopes.DomainsRead, policy =>
             policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.DomainsRead)))
         .AddPolicy(ApiKeyScopes.DomainsWrite, policy =>
@@ -173,6 +178,14 @@ try
     builder.Services.AddScoped<ITemplateService, TemplateService>();
     builder.Services.AddScoped<IWebhookDeliveryService, WebhookDeliveryService>();
     builder.Services.AddScoped<ISesNotificationService, SesNotificationService>();
+
+    // Azure Blob Storage for email attachments
+    var azureStorageConnectionString = builder.Configuration["AzureStorage:ConnectionString"];
+    if (!string.IsNullOrEmpty(azureStorageConnectionString))
+    {
+        builder.Services.AddSingleton(new BlobServiceClient(azureStorageConnectionString));
+        builder.Services.AddScoped<IAttachmentStorageService, AttachmentStorageService>();
+    }
 
     // Billing Services
     builder.Services.AddScoped<IBillingService, BillingService>();

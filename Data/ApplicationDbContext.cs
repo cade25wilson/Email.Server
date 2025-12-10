@@ -34,6 +34,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<Messages> Messages { get; set; }
     public DbSet<MessageRecipients> MessageRecipients { get; set; }
     public DbSet<MessageTags> MessageTags { get; set; }
+    public DbSet<MessageAttachments> MessageAttachments { get; set; }
 
     // Events & Analytics
     public DbSet<MessageEvents> MessageEvents { get; set; }
@@ -270,6 +271,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasOne(mt => mt.Message)
                 .WithMany()
                 .HasForeignKey(mt => mt.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // MessageAttachments
+        builder.Entity<MessageAttachments>(entity =>
+        {
+            entity.ToTable("MessageAttachments");
+            entity.HasIndex(ma => ma.MessageId).HasDatabaseName("IX_MessageAttachments_Message");
+
+            entity.HasOne(ma => ma.Message)
+                .WithMany()
+                .HasForeignKey(ma => ma.MessageId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

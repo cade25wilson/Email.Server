@@ -236,16 +236,31 @@ public class UsageTrackingService : IUsageTrackingService
                 p.PeriodStart <= now &&
                 p.PeriodEnd > now, ct);
 
-        if (existingPeriod != null)
-        {
-            return existingPeriod;
-        }
-
-        // Get subscription to determine period boundaries
+        // Get subscription to check/update limits
         var subscription = await _context.TenantSubscriptions
             .Include(s => s.BillingPlan)
             .FirstOrDefaultAsync(s => s.TenantId == tenantId, ct);
 
+        if (existingPeriod != null)
+        {
+            // Fix period if it has wrong limits (e.g., created before subscription)
+            if (subscription?.BillingPlan != null &&
+                existingPeriod.IncludedEmailsLimit != subscription.BillingPlan.IncludedEmails)
+            {
+                existingPeriod.SubscriptionId = subscription.Id;
+                existingPeriod.IncludedEmailsLimit = subscription.BillingPlan.IncludedEmails;
+                existingPeriod.OverageEmails = Math.Max(0, existingPeriod.EmailsSent - subscription.BillingPlan.IncludedEmails);
+                await _context.SaveChangesAsync(ct);
+
+                _logger.LogInformation(
+                    "Fixed usage period {PeriodId} for tenant {TenantId}: updated limit to {Limit}",
+                    existingPeriod.Id, tenantId, subscription.BillingPlan.IncludedEmails);
+            }
+
+            return existingPeriod;
+        }
+
+        // Subscription was already fetched above
         DateTime periodStart;
         DateTime periodEnd;
         long includedLimit;

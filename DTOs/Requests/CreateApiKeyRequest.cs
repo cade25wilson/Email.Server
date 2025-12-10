@@ -26,6 +26,8 @@ public class CreateApiKeyRequest
 public static class ApiKeyScopes
 {
     public const string EmailsSend = "emails:send";
+    public const string EmailsRead = "emails:read";
+    public const string EmailsWrite = "emails:write";
     public const string DomainsRead = "domains:read";
     public const string DomainsWrite = "domains:write";
     public const string DomainsDelete = "domains:delete";
@@ -34,6 +36,8 @@ public static class ApiKeyScopes
     public static readonly string[] All =
     [
         EmailsSend,
+        EmailsRead,
+        EmailsWrite,
         DomainsRead,
         DomainsWrite,
         DomainsDelete,
@@ -51,6 +55,7 @@ public static class ApiKeyScopes
     public static readonly string[] SendingOnly =
     [
         EmailsSend,
+        EmailsRead,
         MessagesRead
     ];
 
