@@ -7,6 +7,7 @@ namespace Email.Server.Controllers;
 
 [ApiController]
 [Route("api/v1/[controller]")]
+[Authorize(AuthenticationSchemes = "ApiKey,Bearer")]
 public class DomainsController(IDomainManagementService domainService, ILogger<DomainsController> logger) : ControllerBase
 {
     private readonly IDomainManagementService _domainService = domainService;

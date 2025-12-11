@@ -186,6 +186,18 @@ try
             RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(
                 builder.Configuration["AWS:Region"] ?? "us-west-2")
         };
+
+        // Use explicit credentials if configured (for Azure App Service)
+        var accessKeyId = builder.Configuration["AWS:AccessKeyId"];
+        var secretAccessKey = builder.Configuration["AWS:SecretAccessKey"];
+
+        if (!string.IsNullOrEmpty(accessKeyId) && !string.IsNullOrEmpty(secretAccessKey))
+        {
+            var credentials = new Amazon.Runtime.BasicAWSCredentials(accessKeyId, secretAccessKey);
+            return new AmazonS3Client(credentials, config);
+        }
+
+        // Fall back to default credential chain (env vars, IAM role, etc.)
         return new AmazonS3Client(config);
     });
     builder.Services.AddScoped<IAttachmentStorageService, AttachmentStorageService>();

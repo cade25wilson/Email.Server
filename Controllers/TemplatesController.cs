@@ -7,7 +7,7 @@ namespace Email.Server.Controllers;
 
 [ApiController]
 [Route("api/v1/[controller]")]
-[Authorize]
+[Authorize(AuthenticationSchemes = "ApiKey,Bearer")]
 public class TemplatesController(ITemplateService templateService, ILogger<TemplatesController> logger) : ControllerBase
 {
     private readonly ITemplateService _templateService = templateService;

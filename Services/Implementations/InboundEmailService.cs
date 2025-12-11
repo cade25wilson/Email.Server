@@ -82,7 +82,7 @@ public class InboundEmailService : IInboundEmailService
         // Trigger webhook for inbound email
         await TriggerInboundWebhookAsync(inboundMessage, domain.Domain, cancellationToken);
 
-        return MapToResponse(inboundMessage, domain.Domain);
+        return MapToResponse(inboundMessage);
     }
 
     public async Task<InboundMessageListResponse> GetInboundMessagesAsync(
@@ -108,15 +108,19 @@ public class InboundEmailService : IInboundEmailService
         var messages = await query
             .OrderByDescending(m => m.ReceivedAtUtc)
             .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+            .Take(pageSize + 1) // Fetch one extra to determine has_more
             .ToListAsync(cancellationToken);
+
+        var hasMore = messages.Count > pageSize;
+        if (hasMore)
+        {
+            messages = messages.Take(pageSize).ToList();
+        }
 
         return new InboundMessageListResponse
         {
-            Items = messages.Select(m => MapToResponse(m, m.Domain?.Domain)).ToList(),
-            TotalCount = totalCount,
-            Page = page,
-            PageSize = pageSize
+            Data = messages.Select(m => MapToResponse(m)).ToList(),
+            HasMore = hasMore
         };
     }
 
@@ -131,7 +135,7 @@ public class InboundEmailService : IInboundEmailService
             .Include(m => m.Domain)
             .FirstOrDefaultAsync(m => m.Id == messageId && m.TenantId == tenantId, cancellationToken);
 
-        return message == null ? null : MapToResponse(message, message.Domain?.Domain);
+        return message == null ? null : MapToResponse(message);
     }
 
     public async Task<InboundEmailDownloadResponse> GetRawEmailUrlAsync(
@@ -211,21 +215,46 @@ public class InboundEmailService : IInboundEmailService
         }
     }
 
-    private static InboundMessageResponse MapToResponse(InboundMessages message, string? domainName)
+    private static InboundMessageResponse MapToResponse(InboundMessages message)
     {
+        // Parse additional headers from ParsedJson if available
+        List<string> cc = [];
+        List<string> bcc = [];
+        List<string> replyTo = [];
+
+        if (!string.IsNullOrEmpty(message.ParsedJson))
+        {
+            try
+            {
+                var headers = JsonSerializer.Deserialize<Dictionary<string, string>>(message.ParsedJson);
+                if (headers != null)
+                {
+                    if (headers.TryGetValue("cc", out var ccValue) && !string.IsNullOrEmpty(ccValue))
+                        cc = ccValue.Split(',').Select(e => e.Trim()).ToList();
+                    if (headers.TryGetValue("bcc", out var bccValue) && !string.IsNullOrEmpty(bccValue))
+                        bcc = bccValue.Split(',').Select(e => e.Trim()).ToList();
+                    if (headers.TryGetValue("reply-to", out var replyToValue) && !string.IsNullOrEmpty(replyToValue))
+                        replyTo = replyToValue.Split(',').Select(e => e.Trim()).ToList();
+                }
+            }
+            catch
+            {
+                // Ignore parsing errors
+            }
+        }
+
         return new InboundMessageResponse
         {
             Id = message.Id,
-            DomainId = message.DomainId,
-            DomainName = domainName,
-            Recipient = message.Recipient,
-            FromAddress = message.FromAddress,
+            To = [message.Recipient],
+            From = message.FromAddress,
+            CreatedAt = message.ReceivedAtUtc,
             Subject = message.Subject,
-            ReceivedAtUtc = message.ReceivedAtUtc,
-            SizeBytes = message.SizeBytes,
-            Region = message.Region,
-            SesMessageId = message.SesMessageId,
-            ProcessedAtUtc = message.ProcessedAtUtc
+            Cc = cc,
+            Bcc = bcc,
+            ReplyTo = replyTo,
+            MessageId = message.SesMessageId,
+            Attachments = [] // TODO: Parse attachments from email if needed
         };
     }
 }

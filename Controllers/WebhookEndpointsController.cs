@@ -8,7 +8,7 @@ namespace Email.Server.Controllers;
 
 [ApiController]
 [Route("api/v1/webhook-endpoints")]
-[Authorize]
+[Authorize(AuthenticationSchemes = "ApiKey,Bearer")]
 public class WebhookEndpointsController(
     IWebhookDeliveryService webhookDeliveryService,
     ILogger<WebhookEndpointsController> logger) : ControllerBase

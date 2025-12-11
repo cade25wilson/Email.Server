@@ -8,6 +8,7 @@ namespace Email.Server.Controllers;
 
 [ApiController]
 [Route("api/v1/[controller]")]
+[Authorize(AuthenticationSchemes = "ApiKey,Bearer")]
 public class BillingController(
     IBillingService billingService,
     ISubscriptionEnforcementService enforcementService,

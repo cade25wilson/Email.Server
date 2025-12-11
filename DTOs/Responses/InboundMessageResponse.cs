@@ -7,53 +7,65 @@ public class InboundMessageResponse
     [JsonPropertyName("id")]
     public Guid Id { get; set; }
 
-    [JsonPropertyName("domain_id")]
-    public Guid? DomainId { get; set; }
+    [JsonPropertyName("to")]
+    public List<string> To { get; set; } = [];
 
-    [JsonPropertyName("domain_name")]
-    public string? DomainName { get; set; }
+    [JsonPropertyName("from")]
+    public required string From { get; set; }
 
-    [JsonPropertyName("recipient")]
-    public required string Recipient { get; set; }
-
-    [JsonPropertyName("from_address")]
-    public required string FromAddress { get; set; }
+    [JsonPropertyName("created_at")]
+    public DateTime CreatedAt { get; set; }
 
     [JsonPropertyName("subject")]
     public string? Subject { get; set; }
 
-    [JsonPropertyName("received_at_utc")]
-    public DateTime ReceivedAtUtc { get; set; }
+    [JsonPropertyName("bcc")]
+    public List<string> Bcc { get; set; } = [];
 
-    [JsonPropertyName("size_bytes")]
-    public long? SizeBytes { get; set; }
+    [JsonPropertyName("cc")]
+    public List<string> Cc { get; set; } = [];
 
-    [JsonPropertyName("region")]
-    public required string Region { get; set; }
+    [JsonPropertyName("reply_to")]
+    public List<string> ReplyTo { get; set; } = [];
 
-    [JsonPropertyName("ses_message_id")]
-    public string? SesMessageId { get; set; }
+    [JsonPropertyName("message_id")]
+    public string? MessageId { get; set; }
 
-    [JsonPropertyName("processed_at_utc")]
-    public DateTime? ProcessedAtUtc { get; set; }
+    [JsonPropertyName("attachments")]
+    public List<InboundAttachmentResponse> Attachments { get; set; } = [];
+}
+
+public class InboundAttachmentResponse
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("filename")]
+    public required string Filename { get; set; }
+
+    [JsonPropertyName("content_type")]
+    public required string ContentType { get; set; }
+
+    [JsonPropertyName("content_id")]
+    public string? ContentId { get; set; }
+
+    [JsonPropertyName("content_disposition")]
+    public string ContentDisposition { get; set; } = "attachment";
+
+    [JsonPropertyName("size")]
+    public long Size { get; set; }
 }
 
 public class InboundMessageListResponse
 {
-    [JsonPropertyName("items")]
-    public List<InboundMessageResponse> Items { get; set; } = [];
+    [JsonPropertyName("object")]
+    public string Object { get; set; } = "list";
 
-    [JsonPropertyName("total_count")]
-    public int TotalCount { get; set; }
+    [JsonPropertyName("has_more")]
+    public bool HasMore { get; set; }
 
-    [JsonPropertyName("page")]
-    public int Page { get; set; }
-
-    [JsonPropertyName("page_size")]
-    public int PageSize { get; set; }
-
-    [JsonPropertyName("total_pages")]
-    public int TotalPages => PageSize > 0 ? (int)Math.Ceiling((double)TotalCount / PageSize) : 0;
+    [JsonPropertyName("data")]
+    public List<InboundMessageResponse> Data { get; set; } = [];
 }
 
 public class InboundEmailDownloadResponse

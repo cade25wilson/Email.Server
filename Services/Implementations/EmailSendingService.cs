@@ -1,4 +1,5 @@
 using Amazon.SimpleEmailV2.Model;
+using MimeKit;
 using Email.Server.Data;
 using Email.Server.DTOs.Requests;
 using Email.Server.DTOs.Responses;
@@ -15,7 +16,10 @@ public class EmailSendingService : IEmailSendingService
     private readonly ISesClientService _sesClient;
     private readonly IUsageTrackingService _usageTracking;
     private readonly ITemplateService _templateService;
+    private readonly IAttachmentStorageService _attachmentStorage;
     private readonly ILogger<EmailSendingService> _logger;
+
+    private const long MaxAttachmentSize = 10 * 1024 * 1024; // 10MB total
 
     public EmailSendingService(
         ApplicationDbContext context,
@@ -23,6 +27,7 @@ public class EmailSendingService : IEmailSendingService
         ISesClientService sesClient,
         IUsageTrackingService usageTracking,
         ITemplateService templateService,
+        IAttachmentStorageService attachmentStorage,
         ILogger<EmailSendingService> logger)
     {
         _context = context;
@@ -30,6 +35,7 @@ public class EmailSendingService : IEmailSendingService
         _sesClient = sesClient;
         _usageTracking = usageTracking;
         _templateService = templateService;
+        _attachmentStorage = attachmentStorage;
         _logger = logger;
     }
 
@@ -180,6 +186,89 @@ public class EmailSendingService : IEmailSendingService
             }
         }
 
+        // Process attachments
+        var attachmentRecords = new List<MessageAttachments>();
+        if (request.Attachments != null && request.Attachments.Count > 0)
+        {
+            long totalSize = 0;
+            using var httpClient = new HttpClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+            foreach (var attachment in request.Attachments)
+            {
+                byte[] contentBytes;
+                string contentType;
+
+                // Validate: either content or path must be provided
+                if (string.IsNullOrEmpty(attachment.Content) && string.IsNullOrEmpty(attachment.Path))
+                {
+                    throw new InvalidOperationException($"Attachment '{attachment.Filename}' must have either 'content' or 'path' specified");
+                }
+
+                if (!string.IsNullOrEmpty(attachment.Path))
+                {
+                    // Fetch from URL
+                    _logger.LogDebug("Fetching attachment from URL: {Url}", attachment.Path);
+
+                    try
+                    {
+                        var response = await httpClient.GetAsync(attachment.Path, cancellationToken);
+                        response.EnsureSuccessStatusCode();
+
+                        contentBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+
+                        // Use provided content_type or infer from response headers
+                        contentType = attachment.ContentType
+                            ?? response.Content.Headers.ContentType?.MediaType
+                            ?? "application/octet-stream";
+                    }
+                    catch (HttpRequestException ex)
+                    {
+                        throw new InvalidOperationException($"Failed to fetch attachment from '{attachment.Path}': {ex.Message}");
+                    }
+                }
+                else
+                {
+                    // Use base64 content
+                    contentBytes = Convert.FromBase64String(attachment.Content!);
+                    contentType = attachment.ContentType ?? "application/octet-stream";
+                }
+
+                totalSize += contentBytes.Length;
+
+                if (totalSize > MaxAttachmentSize)
+                {
+                    throw new InvalidOperationException("Total attachment size exceeds 10MB limit");
+                }
+
+                // Store to S3
+                using var stream = new MemoryStream(contentBytes);
+                var s3Key = await _attachmentStorage.UploadAttachmentAsync(
+                    tenantId,
+                    message.Id,
+                    attachment.Filename,
+                    contentType,
+                    stream,
+                    cancellationToken);
+
+                var attachmentRecord = new MessageAttachments
+                {
+                    MessageId = message.Id,
+                    FileName = attachment.Filename,
+                    ContentType = contentType,
+                    SizeBytes = contentBytes.Length,
+                    BlobUrl = s3Key,
+                    IsInline = false
+                };
+
+                attachmentRecords.Add(attachmentRecord);
+                _context.MessageAttachments.Add(attachmentRecord);
+            }
+
+            _logger.LogInformation("Processed {Count} attachments ({Size} bytes) for message {MessageId}",
+                request.Attachments.Count, totalSize, message.Id);
+        }
+
         // If scheduled, save and return - don't send yet
         if (isScheduled)
         {
@@ -202,50 +291,76 @@ public class EmailSendingService : IEmailSendingService
         // Send via SES
         try
         {
-            var sesRequest = new Amazon.SimpleEmailV2.Model.SendEmailRequest
-            {
-                FromEmailAddress = request.FromName != null
-                    ? $"{request.FromName} <{request.FromEmail}>"
-                    : request.FromEmail,
-                Destination = new Destination
-                {
-                    ToAddresses = request.To.Select(r => r.Email).ToList(),
-                    CcAddresses = request.Cc?.Select(r => r.Email).ToList(),
-                    BccAddresses = request.Bcc?.Select(r => r.Email).ToList()
-                },
-                Content = new EmailContent
-                {
-                    Simple = new Message
-                    {
-                        Subject = new Content { Data = subject },
-                        Body = new Body
-                        {
-                            Html = htmlBody != null ? new Content { Data = htmlBody } : null,
-                            Text = textBody != null ? new Content { Data = textBody } : null
-                        }
-                    }
-                }
-            };
-
-            // Use specified ConfigSet or fall back to default
+            // Determine configuration set
+            string? configurationSetName = null;
             if (request.ConfigSetId.HasValue)
             {
                 var configSet = await _context.ConfigSets.FindAsync(request.ConfigSetId.Value);
                 if (configSet != null)
                 {
-                    sesRequest.ConfigurationSetName = configSet.ConfigSetName;
+                    configurationSetName = configSet.ConfigSetName;
                 }
             }
             else
             {
-                // Use the default ConfigSet for this tenant's region
                 var defaultConfigSet = await _context.ConfigSets
                     .FirstOrDefaultAsync(cs => cs.SesRegionId == sesRegion.Id && cs.IsDefault, cancellationToken);
                 if (defaultConfigSet != null)
                 {
-                    sesRequest.ConfigurationSetName = defaultConfigSet.ConfigSetName;
-                    _logger.LogDebug("Using default ConfigSet '{ConfigSetName}' for email", defaultConfigSet.ConfigSetName);
+                    configurationSetName = defaultConfigSet.ConfigSetName;
+                    _logger.LogDebug("Using default ConfigSet '{ConfigSetName}' for email", configurationSetName);
                 }
+            }
+
+            Amazon.SimpleEmailV2.Model.SendEmailRequest sesRequest;
+
+            // Use raw MIME message if there are attachments
+            if (request.Attachments != null && request.Attachments.Count > 0)
+            {
+                var rawMessage = BuildRawMimeMessage(request, subject, htmlBody, textBody);
+                sesRequest = new Amazon.SimpleEmailV2.Model.SendEmailRequest
+                {
+                    Content = new EmailContent
+                    {
+                        Raw = new RawMessage
+                        {
+                            Data = rawMessage
+                        }
+                    }
+                };
+            }
+            else
+            {
+                // Simple message without attachments
+                sesRequest = new Amazon.SimpleEmailV2.Model.SendEmailRequest
+                {
+                    FromEmailAddress = request.FromName != null
+                        ? $"{request.FromName} <{request.FromEmail}>"
+                        : request.FromEmail,
+                    Destination = new Destination
+                    {
+                        ToAddresses = request.To.Select(r => r.Email).ToList(),
+                        CcAddresses = request.Cc?.Select(r => r.Email).ToList(),
+                        BccAddresses = request.Bcc?.Select(r => r.Email).ToList()
+                    },
+                    Content = new EmailContent
+                    {
+                        Simple = new Message
+                        {
+                            Subject = new Content { Data = subject },
+                            Body = new Body
+                            {
+                                Html = htmlBody != null ? new Content { Data = htmlBody } : null,
+                                Text = textBody != null ? new Content { Data = textBody } : null
+                            }
+                        }
+                    }
+                };
+            }
+
+            if (configurationSetName != null)
+            {
+                sesRequest.ConfigurationSetName = configurationSetName;
             }
 
             // Add AWS SES tenant name to the request for reputation isolation
@@ -511,5 +626,100 @@ public class EmailSendingService : IEmailSendingService
             ScheduledAtUtc = message.ScheduledAtUtc,
             Error = message.Error
         };
+    }
+
+    private static MemoryStream BuildRawMimeMessage(
+        DTOs.Requests.SendEmailRequest request,
+        string subject,
+        string? htmlBody,
+        string? textBody)
+    {
+        var message = new MimeMessage();
+
+        // Set from address
+        message.From.Add(request.FromName != null
+            ? new MailboxAddress(request.FromName, request.FromEmail)
+            : new MailboxAddress(request.FromEmail, request.FromEmail));
+
+        // Add recipients
+        foreach (var to in request.To)
+        {
+            message.To.Add(to.Name != null
+                ? new MailboxAddress(to.Name, to.Email)
+                : new MailboxAddress(to.Email, to.Email));
+        }
+
+        if (request.Cc != null)
+        {
+            foreach (var cc in request.Cc)
+            {
+                message.Cc.Add(cc.Name != null
+                    ? new MailboxAddress(cc.Name, cc.Email)
+                    : new MailboxAddress(cc.Email, cc.Email));
+            }
+        }
+
+        if (request.Bcc != null)
+        {
+            foreach (var bcc in request.Bcc)
+            {
+                message.Bcc.Add(bcc.Name != null
+                    ? new MailboxAddress(bcc.Name, bcc.Email)
+                    : new MailboxAddress(bcc.Email, bcc.Email));
+            }
+        }
+
+        message.Subject = subject;
+
+        // Build the body
+        var builder = new BodyBuilder();
+
+        if (!string.IsNullOrEmpty(textBody))
+        {
+            builder.TextBody = textBody;
+        }
+
+        if (!string.IsNullOrEmpty(htmlBody))
+        {
+            builder.HtmlBody = htmlBody;
+        }
+
+        // Add attachments - fetch content from URL or decode base64
+        if (request.Attachments != null)
+        {
+            foreach (var attachment in request.Attachments)
+            {
+                byte[] contentBytes;
+                string contentType;
+
+                if (!string.IsNullOrEmpty(attachment.Path))
+                {
+                    // Fetch from URL synchronously (we're in a static method)
+                    using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+                    var response = httpClient.GetAsync(attachment.Path).GetAwaiter().GetResult();
+                    response.EnsureSuccessStatusCode();
+                    contentBytes = response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+                    contentType = attachment.ContentType
+                        ?? response.Content.Headers.ContentType?.MediaType
+                        ?? "application/octet-stream";
+                }
+                else
+                {
+                    contentBytes = Convert.FromBase64String(attachment.Content!);
+                    contentType = attachment.ContentType ?? "application/octet-stream";
+                }
+
+                builder.Attachments.Add(attachment.Filename, contentBytes, ContentType.Parse(contentType));
+            }
+        }
+
+        message.Body = builder.ToMessageBody();
+
+        // Write to stream
+        var stream = new MemoryStream();
+        message.WriteTo(stream);
+        stream.Position = 0;
+
+        return stream;
     }
 }
