@@ -7,7 +7,7 @@ namespace Email.Server.Controllers;
 
 [ApiController]
 [Route("api/v1/[controller]")]
-[Authorize(AuthenticationSchemes = "Bearer,ApiKey")]
+[Authorize(AuthenticationSchemes = "ApiKey,Bearer")]
 public class EmailsController(
     IEmailSendingService emailService,
     IMessageService messageService,

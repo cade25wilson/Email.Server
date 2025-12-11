@@ -6,6 +6,7 @@ namespace Email.Server.Controllers;
 
 [ApiController]
 [Route("api/v1/[controller]")]
+[Authorize(AuthenticationSchemes = "ApiKey,Bearer")]
 public class MessagesController(IMessageService messageService, ILogger<MessagesController> logger) : ControllerBase
 {
     private readonly IMessageService _messageService = messageService;

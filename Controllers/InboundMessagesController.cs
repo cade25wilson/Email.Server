@@ -6,6 +6,7 @@ namespace Email.Server.Controllers;
 
 [ApiController]
 [Route("api/v1/inbound")]
+[Authorize(AuthenticationSchemes = "ApiKey,Bearer")]
 public class InboundMessagesController(
     IInboundEmailService inboundEmailService,
     ILogger<InboundMessagesController> logger) : ControllerBase

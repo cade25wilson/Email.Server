@@ -16,7 +16,7 @@ namespace Email.Server.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
+    [Authorize(AuthenticationSchemes = "ApiKey,Bearer")]
     public class TenantsController(
         ITenantManagementService tenantManagementService,
         ApplicationDbContext context,
