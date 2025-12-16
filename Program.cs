@@ -132,21 +132,14 @@ try
     // Register claims transformation for adding TenantId to Entra tokens
     builder.Services.AddScoped<IClaimsTransformation, TenantClaimsTransformation>();
 
-    // Configure CORS
+    // Configure CORS - Allow all origins since API is protected by JWT/API keys
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("AllowFrontend", policy =>
         {
-            policy.WithOrigins(
-                    "https://localhost:59592",
-                    "http://localhost:5173",
-                    "https://localhost:59594",
-                    "https://localhost:59593",
-                    "https://www.sendbase.app",
-                    "https://polite-mud-06a30121e.3.azurestaticapps.net") // Azure Static Web App
+            policy.AllowAnyOrigin()
                   .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
+                  .AllowAnyMethod();
         });
     });
 
