@@ -14,6 +14,7 @@ public class InboundEmailService : IInboundEmailService
     private readonly ITenantContextService _tenantContext;
     private readonly IInboundEmailStorageService _storageService;
     private readonly IWebhookDeliveryService _webhookService;
+    private readonly IUsageTrackingService _usageTracking;
     private readonly ILogger<InboundEmailService> _logger;
 
     public InboundEmailService(
@@ -21,12 +22,14 @@ public class InboundEmailService : IInboundEmailService
         ITenantContextService tenantContext,
         IInboundEmailStorageService storageService,
         IWebhookDeliveryService webhookService,
+        IUsageTrackingService usageTracking,
         ILogger<InboundEmailService> logger)
     {
         _context = context;
         _tenantContext = tenantContext;
         _storageService = storageService;
         _webhookService = webhookService;
+        _usageTracking = usageTracking;
         _logger = logger;
     }
 
@@ -74,6 +77,9 @@ public class InboundEmailService : IInboundEmailService
 
         _context.InboundMessages.Add(inboundMessage);
         await _context.SaveChangesAsync(cancellationToken);
+
+        // Track inbound email as usage (counts same as sent emails)
+        await _usageTracking.RecordEmailSendAsync(domain.TenantId, 1, "Inbound", cancellationToken);
 
         _logger.LogInformation(
             "Processed inbound email {MessageId} from {From} to {To} for tenant {TenantId}",
