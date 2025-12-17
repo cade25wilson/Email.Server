@@ -33,5 +33,8 @@ namespace Email.Server.Models
 
         [MaxLength(500)]
         public string? SendingDisabledReason { get; set; }
+
+        // Reputation monitoring
+        public DateTime? ReputationWarningEmailSentAt { get; set; }
     }
 }
