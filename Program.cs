@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Amazon.S3;
+using Amazon.SimpleNotificationService;
 using Email.Server.Authentication;
 using Email.Server.Configuration;
 using Email.Server.Data;
@@ -124,7 +125,19 @@ try
         .AddPolicy(ApiKeyScopes.DomainsDelete, policy =>
             policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.DomainsDelete)))
         .AddPolicy(ApiKeyScopes.MessagesRead, policy =>
-            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.MessagesRead)));
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.MessagesRead)))
+        .AddPolicy(ApiKeyScopes.SmsSend, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.SmsSend)))
+        .AddPolicy(ApiKeyScopes.SmsRead, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.SmsRead)))
+        .AddPolicy(ApiKeyScopes.SmsWrite, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.SmsWrite)))
+        .AddPolicy(ApiKeyScopes.PushSend, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.PushSend)))
+        .AddPolicy(ApiKeyScopes.PushRead, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.PushRead)))
+        .AddPolicy(ApiKeyScopes.PushWrite, policy =>
+            policy.AddRequirements(new ApiKeyScopeRequirement(ApiKeyScopes.PushWrite)));
 
     // Register authorization handler
     builder.Services.AddSingleton<IAuthorizationHandler, ApiKeyScopeHandler>();
@@ -156,6 +169,13 @@ try
     // Configure Billing Settings
     builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection(StripeSettings.SectionName));
     builder.Services.Configure<BillingSettings>(builder.Configuration.GetSection(BillingSettings.SectionName));
+
+    // Configure SMS Settings
+    builder.Services.Configure<AwsSmsSettings>(builder.Configuration.GetSection(AwsSmsSettings.SectionName));
+
+    // Configure Push Notification Settings
+    builder.Services.Configure<Email.Shared.Configuration.AwsPushSettings>(
+        builder.Configuration.GetSection(Email.Shared.Configuration.AwsPushSettings.SectionName));
 
     // Register Services
     builder.Services.AddSingleton<ISesClientFactory, SesClientFactory>();
@@ -202,6 +222,45 @@ try
     builder.Services.AddScoped<IUsageTrackingService, UsageTrackingService>();
     builder.Services.AddScoped<IStripeWebhookService, StripeWebhookService>();
     builder.Services.AddScoped<ISubscriptionEnforcementService, SubscriptionEnforcementService>();
+
+    // AWS SNS for SMS and Push Notifications
+    builder.Services.AddSingleton<IAmazonSimpleNotificationService>(sp =>
+    {
+        var pushSettings = builder.Configuration
+            .GetSection(Email.Shared.Configuration.AwsPushSettings.SectionName)
+            .Get<Email.Shared.Configuration.AwsPushSettings>();
+        var region = pushSettings?.Region ?? builder.Configuration["AWS:Region"] ?? "us-west-2";
+
+        var config = new AmazonSimpleNotificationServiceConfig
+        {
+            RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(region)
+        };
+
+        // Use explicit credentials if configured (for Azure App Service)
+        var accessKeyId = builder.Configuration["AWS:AccessKeyId"];
+        var secretAccessKey = builder.Configuration["AWS:SecretAccessKey"];
+
+        if (!string.IsNullOrEmpty(accessKeyId) && !string.IsNullOrEmpty(secretAccessKey))
+        {
+            var credentials = new Amazon.Runtime.BasicAWSCredentials(accessKeyId, secretAccessKey);
+            return new AmazonSimpleNotificationServiceClient(credentials, config);
+        }
+
+        // Fall back to default credential chain (env vars, IAM role, etc.)
+        return new AmazonSimpleNotificationServiceClient(config);
+    });
+
+    // SMS Services (uses SNS for transactional SMS)
+    builder.Services.AddScoped<ISmsClientService, AwsSmsClientService>();
+    builder.Services.AddScoped<ISmsService, SmsService>();
+    builder.Services.AddScoped<ISmsTemplateService, SmsTemplateService>();
+
+    // Push Notification Services
+    builder.Services.AddScoped<Email.Shared.Services.Interfaces.IPushClientService, AwsPushClientService>();
+    builder.Services.AddScoped<Email.Shared.Services.Interfaces.IPushCredentialService, PushCredentialService>();
+    builder.Services.AddScoped<Email.Shared.Services.Interfaces.IPushDeviceService, PushDeviceService>();
+    builder.Services.AddScoped<Email.Shared.Services.Interfaces.IPushTemplateService, PushTemplateService>();
+    builder.Services.AddScoped<Email.Shared.Services.Interfaces.IPushService, PushService>();
 
     // Add HttpClientFactory for webhook confirmations and deliveries
     builder.Services.AddHttpClient();

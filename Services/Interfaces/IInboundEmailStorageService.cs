@@ -24,8 +24,11 @@ public interface IInboundEmailStorageService
     /// <summary>
     /// Gets a presigned download URL for the raw email (1 hour expiry)
     /// </summary>
+    /// <param name="s3Key">The S3 key</param>
+    /// <param name="filename">Optional filename for the download (defaults to key filename)</param>
     Task<(string Url, DateTime ExpiresAt)> GetSignedDownloadUrlAsync(
         string s3Key,
+        string? filename = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

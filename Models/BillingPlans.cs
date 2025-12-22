@@ -38,6 +38,22 @@ public class BillingPlans
 
     public bool AllowsOverage { get; set; }
 
+    // SMS limits
+    public int IncludedSms { get; set; } = 0;
+
+    public int SmsOverageRateCentsPer100 { get; set; } = 150; // $1.50 per 100 = $0.015 each
+
+    public bool AllowsSmsOverage { get; set; } = true;
+
+    // Push notification limits
+    public int IncludedPush { get; set; } = 0;
+
+    public int PushOverageRateCentsPer1K { get; set; } = 100; // $1.00 per 1K
+
+    public bool AllowsPushOverage { get; set; } = true;
+
+    public int MaxPushCredentials { get; set; } = 2;
+
     public int MaxApiKeys { get; set; }
 
     public int MaxDomains { get; set; }

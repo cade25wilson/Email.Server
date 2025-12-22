@@ -51,12 +51,7 @@ public class InboundEmailService : IInboundEmailService
                 d.Domain.ToLower() == recipientDomain &&
                 d.InboundEnabled &&
                 d.Region == notification.Region,
-                cancellationToken);
-
-        if (domain == null)
-        {
-            throw new InvalidOperationException($"No inbound-enabled domain found for {recipientDomain} in region {notification.Region}");
-        }
+                cancellationToken) ?? throw new InvalidOperationException($"No inbound-enabled domain found for {recipientDomain} in region {notification.Region}");
 
         // Create the inbound message record
         var inboundMessage = new InboundMessages
@@ -155,7 +150,7 @@ public class InboundEmailService : IInboundEmailService
             .FirstOrDefaultAsync(m => m.Id == messageId && m.TenantId == tenantId, cancellationToken)
             ?? throw new KeyNotFoundException($"Inbound message {messageId} not found");
 
-        var (url, expiresAt) = await _storageService.GetSignedDownloadUrlAsync(message.BlobKey, cancellationToken);
+        var (url, expiresAt) = await _storageService.GetSignedDownloadUrlAsync(message.BlobKey, null, cancellationToken);
 
         return new InboundEmailDownloadResponse
         {

@@ -65,16 +65,25 @@ public class InboundEmailStorageService : IInboundEmailStorageService
 
     public Task<(string Url, DateTime ExpiresAt)> GetSignedDownloadUrlAsync(
         string s3Key,
+        string? filename = null,
         CancellationToken cancellationToken = default)
     {
         var expiresAt = DateTime.UtcNow.Add(PresignedUrlExpiry);
+
+        // Extract filename from key if not provided (e.g., "inbound/.../messageId.eml" -> "messageId.eml")
+        var downloadFilename = filename ?? Path.GetFileName(s3Key);
 
         var request = new GetPreSignedUrlRequest
         {
             BucketName = _bucketName,
             Key = s3Key,
             Expires = expiresAt,
-            Verb = HttpVerb.GET
+            Verb = HttpVerb.GET,
+            ResponseHeaderOverrides = new ResponseHeaderOverrides
+            {
+                ContentType = "message/rfc822",
+                ContentDisposition = $"attachment; filename=\"{downloadFilename}\""
+            }
         };
 
         var url = _s3Client.GetPreSignedURL(request);

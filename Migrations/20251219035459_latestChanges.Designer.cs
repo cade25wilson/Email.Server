@@ -4,6 +4,7 @@ using Email.Server.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Email.Server.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251219035459_latestChanges")]
+    partial class latestChanges
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -89,9 +92,6 @@ namespace Email.Server.Migrations
                     b.Property<bool>("AllowsOverage")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("AllowsPushOverage")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("AllowsSmsOverage")
                         .HasColumnType("bit");
 
@@ -115,9 +115,6 @@ namespace Email.Server.Migrations
                     b.Property<int>("IncludedEmails")
                         .HasColumnType("int");
 
-                    b.Property<int>("IncludedPush")
-                        .HasColumnType("int");
-
                     b.Property<int>("IncludedSms")
                         .HasColumnType("int");
 
@@ -128,9 +125,6 @@ namespace Email.Server.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("MaxDomains")
-                        .HasColumnType("int");
-
-                    b.Property<int>("MaxPushCredentials")
                         .HasColumnType("int");
 
                     b.Property<int>("MaxTeamMembers")
@@ -151,9 +145,6 @@ namespace Email.Server.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.Property<int>("OverageRateCentsPer1K")
-                        .HasColumnType("int");
-
-                    b.Property<int>("PushOverageRateCentsPer1K")
                         .HasColumnType("int");
 
                     b.Property<int>("SmsOverageRateCentsPer100")
@@ -203,7 +194,6 @@ namespace Email.Server.Migrations
                         {
                             Id = new Guid("00000000-0000-0000-0000-000000000001"),
                             AllowsOverage = true,
-                            AllowsPushOverage = true,
                             AllowsSmsOverage = true,
                             AnalyticsRetentionDays = 7,
                             CreatedAtUtc = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -211,19 +201,16 @@ namespace Email.Server.Migrations
                             DisplayName = "Starter",
                             HasDedicatedIp = false,
                             IncludedEmails = 25000,
-                            IncludedPush = 0,
                             IncludedSms = 0,
                             IsActive = true,
                             MaxApiKeys = 2,
                             MaxDomains = 1,
-                            MaxPushCredentials = 2,
                             MaxTeamMembers = 1,
                             MaxTemplates = 10,
                             MaxWebhooks = 2,
                             MonthlyPriceCents = 900,
                             Name = "starter",
                             OverageRateCentsPer1K = 40,
-                            PushOverageRateCentsPer1K = 100,
                             SmsOverageRateCentsPer100 = 150,
                             SortOrder = 1,
                             StripePriceId = "price_starter",
@@ -235,7 +222,6 @@ namespace Email.Server.Migrations
                         {
                             Id = new Guid("00000000-0000-0000-0000-000000000002"),
                             AllowsOverage = true,
-                            AllowsPushOverage = true,
                             AllowsSmsOverage = true,
                             AnalyticsRetentionDays = 30,
                             CreatedAtUtc = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -243,19 +229,16 @@ namespace Email.Server.Migrations
                             DisplayName = "Growth",
                             HasDedicatedIp = false,
                             IncludedEmails = 100000,
-                            IncludedPush = 0,
                             IncludedSms = 0,
                             IsActive = true,
                             MaxApiKeys = 10,
                             MaxDomains = 5,
-                            MaxPushCredentials = 2,
                             MaxTeamMembers = 5,
                             MaxTemplates = 50,
                             MaxWebhooks = 5,
                             MonthlyPriceCents = 2900,
                             Name = "growth",
                             OverageRateCentsPer1K = 30,
-                            PushOverageRateCentsPer1K = 100,
                             SmsOverageRateCentsPer100 = 150,
                             SortOrder = 2,
                             StripePriceId = "price_growth",
@@ -267,7 +250,6 @@ namespace Email.Server.Migrations
                         {
                             Id = new Guid("00000000-0000-0000-0000-000000000003"),
                             AllowsOverage = true,
-                            AllowsPushOverage = true,
                             AllowsSmsOverage = true,
                             AnalyticsRetentionDays = 90,
                             CreatedAtUtc = new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -275,19 +257,16 @@ namespace Email.Server.Migrations
                             DisplayName = "Enterprise",
                             HasDedicatedIp = true,
                             IncludedEmails = 500000,
-                            IncludedPush = 0,
                             IncludedSms = 0,
                             IsActive = true,
                             MaxApiKeys = 50,
                             MaxDomains = 999,
-                            MaxPushCredentials = 2,
                             MaxTeamMembers = 20,
                             MaxTemplates = 200,
                             MaxWebhooks = 20,
                             MonthlyPriceCents = 9900,
                             Name = "enterprise",
                             OverageRateCentsPer1K = 20,
-                            PushOverageRateCentsPer1K = 100,
                             SmsOverageRateCentsPer100 = 150,
                             SortOrder = 3,
                             StripePriceId = "price_enterprise",
@@ -904,7 +883,7 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "us-east-1",
-                            CreatedAtUtc = new DateTime(2025, 12, 21, 21, 27, 45, 326, DateTimeKind.Utc).AddTicks(8236),
+                            CreatedAtUtc = new DateTime(2025, 12, 19, 3, 54, 58, 110, DateTimeKind.Utc).AddTicks(3755),
                             DefaultForNewTenants = false,
                             DisplayName = "US East (N. Virginia)",
                             ReceiveSupported = true,
@@ -913,7 +892,7 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "us-west-2",
-                            CreatedAtUtc = new DateTime(2025, 12, 21, 21, 27, 45, 327, DateTimeKind.Utc).AddTicks(3640),
+                            CreatedAtUtc = new DateTime(2025, 12, 19, 3, 54, 58, 110, DateTimeKind.Utc).AddTicks(5211),
                             DefaultForNewTenants = true,
                             DisplayName = "US West (Oregon)",
                             ReceiveSupported = true,
@@ -922,7 +901,7 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "eu-west-1",
-                            CreatedAtUtc = new DateTime(2025, 12, 21, 21, 27, 45, 327, DateTimeKind.Utc).AddTicks(3673),
+                            CreatedAtUtc = new DateTime(2025, 12, 19, 3, 54, 58, 110, DateTimeKind.Utc).AddTicks(5213),
                             DefaultForNewTenants = false,
                             DisplayName = "EU (Ireland)",
                             ReceiveSupported = true,
@@ -931,7 +910,7 @@ namespace Email.Server.Migrations
                         new
                         {
                             Region = "ap-southeast-2",
-                            CreatedAtUtc = new DateTime(2025, 12, 21, 21, 27, 45, 327, DateTimeKind.Utc).AddTicks(3688),
+                            CreatedAtUtc = new DateTime(2025, 12, 19, 3, 54, 58, 110, DateTimeKind.Utc).AddTicks(5215),
                             DefaultForNewTenants = false,
                             DisplayName = "APAC (Sydney)",
                             ReceiveSupported = true,
@@ -1647,25 +1626,13 @@ namespace Email.Server.Migrations
                     b.Property<long>("IncludedEmailsLimit")
                         .HasColumnType("bigint");
 
-                    b.Property<long>("IncludedPushLimit")
-                        .HasColumnType("bigint");
-
                     b.Property<long>("IncludedSmsLimit")
                         .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("LastPushStripeReportUtc")
-                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("LastStripeReportUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<long>("OverageEmails")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("OveragePush")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("OveragePushReportedToStripe")
                         .HasColumnType("bigint");
 
                     b.Property<long>("OverageReportedToStripe")
@@ -1682,9 +1649,6 @@ namespace Email.Server.Migrations
 
                     b.Property<DateTime>("PeriodStart")
                         .HasColumnType("datetime2");
-
-                    b.Property<long>("PushSent")
-                        .HasColumnType("bigint");
 
                     b.Property<long>("SmsSegmentsSent")
                         .HasColumnType("bigint");
@@ -1794,316 +1758,6 @@ namespace Email.Server.Migrations
                     b.HasIndex("TenantId");
 
                     b.ToTable("WebhookEndpoints", (string)null);
-                });
-
-            modelBuilder.Entity("Email.Shared.Models.PushCredentials", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWSEQUENTIALID()");
-
-                    b.Property<string>("ApplicationId")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("AwsApplicationArn")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<byte[]>("EncryptedCredentials")
-                        .IsRequired()
-                        .HasColumnType("varbinary(max)");
-
-                    b.Property<DateTime?>("ExpiresAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("KeyId")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<byte>("Platform")
-                        .HasColumnType("tinyint");
-
-                    b.Property<byte>("Status")
-                        .HasColumnType("tinyint");
-
-                    b.Property<string>("StatusMessage")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("TeamId")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("ValidatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AwsApplicationArn")
-                        .HasDatabaseName("IX_PushCredentials_AwsArn");
-
-                    b.HasIndex("TenantId", "IsDefault")
-                        .HasDatabaseName("IX_PushCredentials_TenantDefault");
-
-                    b.HasIndex("TenantId", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("UQ_PushCredentials_TenantName");
-
-                    b.ToTable("PushCredentials", (string)null);
-                });
-
-            modelBuilder.Entity("Email.Shared.Models.PushDeviceTokens", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWSEQUENTIALID()");
-
-                    b.Property<string>("AwsEndpointArn")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("CredentialId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("ExternalUserId")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime?>("LastSeenAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("MetadataJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<byte>("Platform")
-                        .HasColumnType("tinyint");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime?>("UnregisteredAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AwsEndpointArn")
-                        .HasDatabaseName("IX_PushDeviceTokens_AwsArn");
-
-                    b.HasIndex("CredentialId", "Token")
-                        .IsUnique()
-                        .HasDatabaseName("UQ_PushDeviceTokens_CredentialToken");
-
-                    b.HasIndex("TenantId", "ExternalUserId")
-                        .HasDatabaseName("IX_PushDeviceTokens_TenantUser");
-
-                    b.ToTable("PushDeviceTokens", (string)null);
-                });
-
-            modelBuilder.Entity("Email.Shared.Models.PushEvents", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<string>("DeviceToken")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("EventType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("OccurredAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("PayloadJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid?>("PushMessageId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PushMessageId")
-                        .HasDatabaseName("IX_PushEvents_MessageId");
-
-                    b.HasIndex("TenantId", "OccurredAtUtc")
-                        .HasDatabaseName("IX_PushEvents_Tenant_Time");
-
-                    b.ToTable("PushEvents", (string)null);
-                });
-
-            modelBuilder.Entity("Email.Shared.Models.PushMessages", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWSEQUENTIALID()");
-
-                    b.Property<string>("AwsMessageId")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<Guid>("CredentialId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("DataJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("DeliveredCount")
-                        .HasColumnType("int");
-
-                    b.Property<Guid?>("DeviceTokenId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Error")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("ExternalUserId")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("PlatformOptionsJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("RequestedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("ScheduledAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("SentAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<byte>("Status")
-                        .HasColumnType("tinyint");
-
-                    b.Property<int>("TargetCount")
-                        .HasColumnType("int");
-
-                    b.Property<Guid?>("TemplateId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AwsMessageId")
-                        .HasDatabaseName("IX_PushMessages_AwsMessageId");
-
-                    b.HasIndex("CredentialId");
-
-                    b.HasIndex("DeviceTokenId");
-
-                    b.HasIndex("TemplateId");
-
-                    b.HasIndex("Status", "ScheduledAtUtc")
-                        .HasDatabaseName("IX_PushMessages_Scheduled")
-                        .HasFilter("[Status] = 4");
-
-                    b.HasIndex("TenantId", "RequestedAtUtc")
-                        .HasDatabaseName("IX_PushMessages_Tenant_Time");
-
-                    b.ToTable("PushMessages", (string)null);
-                });
-
-            modelBuilder.Entity("Email.Shared.Models.PushTemplates", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWSEQUENTIALID()");
-
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DefaultDataJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<DateTime?>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "Name")
-                        .IsUnique()
-                        .HasDatabaseName("UQ_PushTemplates_TenantName");
-
-                    b.ToTable("PushTemplates", (string)null);
                 });
 
             modelBuilder.Entity("Email.Server.Models.ApiKeys", b =>
@@ -2506,52 +2160,6 @@ namespace Email.Server.Migrations
                         .IsRequired();
 
                     b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("Email.Shared.Models.PushDeviceTokens", b =>
-                {
-                    b.HasOne("Email.Shared.Models.PushCredentials", "Credential")
-                        .WithMany()
-                        .HasForeignKey("CredentialId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Credential");
-                });
-
-            modelBuilder.Entity("Email.Shared.Models.PushEvents", b =>
-                {
-                    b.HasOne("Email.Shared.Models.PushMessages", "PushMessage")
-                        .WithMany()
-                        .HasForeignKey("PushMessageId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("PushMessage");
-                });
-
-            modelBuilder.Entity("Email.Shared.Models.PushMessages", b =>
-                {
-                    b.HasOne("Email.Shared.Models.PushCredentials", "Credential")
-                        .WithMany()
-                        .HasForeignKey("CredentialId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("Email.Shared.Models.PushDeviceTokens", "DeviceToken")
-                        .WithMany()
-                        .HasForeignKey("DeviceTokenId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("Email.Shared.Models.PushTemplates", "Template")
-                        .WithMany()
-                        .HasForeignKey("TemplateId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("Credential");
-
-                    b.Navigation("DeviceToken");
-
-                    b.Navigation("Template");
                 });
 
             modelBuilder.Entity("Email.Server.Models.WebhookEndpoints", b =>

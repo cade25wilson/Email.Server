@@ -26,6 +26,28 @@ public class UsagePeriods
 
     public long OverageReportedToStripe { get; set; }
 
+    // SMS tracking
+    public long SmsSent { get; set; }
+
+    public long SmsSegmentsSent { get; set; }
+
+    public long IncludedSmsLimit { get; set; }
+
+    public long OverageSms { get; set; }
+
+    public long OverageSmsReportedToStripe { get; set; }
+
+    // Push notification tracking
+    public long PushSent { get; set; }
+
+    public long IncludedPushLimit { get; set; }
+
+    public long OveragePush { get; set; }
+
+    public long OveragePushReportedToStripe { get; set; }
+
+    public DateTime? LastPushStripeReportUtc { get; set; }
+
     public DateTime? LastStripeReportUtc { get; set; }
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;

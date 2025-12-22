@@ -9,6 +9,14 @@ public interface IUsageTrackingService
     Task<UsageLimitCheckResult> CheckUsageLimitAsync(Guid tenantId, int requestedCount, CancellationToken ct = default);
     Task ReportOverageToStripeAsync(CancellationToken ct = default);
     Task<UsagePeriods> GetOrCreateCurrentPeriodAsync(Guid tenantId, CancellationToken ct = default);
+
+    // SMS tracking
+    Task RecordSmsSendAsync(Guid tenantId, int smsCount, int segmentCount, string source, CancellationToken ct = default);
+    Task<UsageLimitCheckResult> CheckSmsLimitAsync(Guid tenantId, int requestedCount, CancellationToken ct = default);
+
+    // Push notification tracking
+    Task RecordPushSendAsync(Guid tenantId, int pushCount, string source, CancellationToken ct = default);
+    Task<UsageLimitCheckResult> CheckPushLimitAsync(Guid tenantId, int requestedCount, CancellationToken ct = default);
 }
 
 public class UsageLimitCheckResult

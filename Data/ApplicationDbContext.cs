@@ -61,6 +61,19 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     // Contact
     public DbSet<ContactSubmissions> ContactSubmissions { get; set; }
 
+    // SMS
+    public DbSet<SmsMessages> SmsMessages { get; set; }
+    public DbSet<SmsEvents> SmsEvents { get; set; }
+    public DbSet<SmsPhoneNumbers> SmsPhoneNumbers { get; set; }
+    public DbSet<SmsTemplates> SmsTemplates { get; set; }
+
+    // Push Notifications
+    public DbSet<Email.Shared.Models.PushCredentials> PushCredentials { get; set; }
+    public DbSet<Email.Shared.Models.PushDeviceTokens> PushDeviceTokens { get; set; }
+    public DbSet<Email.Shared.Models.PushMessages> PushMessages { get; set; }
+    public DbSet<Email.Shared.Models.PushTemplates> PushTemplates { get; set; }
+    public DbSet<Email.Shared.Models.PushEvents> PushEvents { get; set; }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -313,8 +326,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         {
             entity.ToTable("Suppressions");
             entity.HasIndex(s => new { s.TenantId, s.Region, s.Email }).IsUnique().HasDatabaseName("UQ_Suppressions")
-                .HasFilter("[Region] IS NOT NULL");
+                .HasFilter("[Region] IS NOT NULL AND [Type] = 0");
             entity.HasIndex(s => new { s.TenantId, s.Email }).HasDatabaseName("IX_Suppressions_Tenant_Email");
+            entity.HasIndex(s => new { s.TenantId, s.PhoneNumber }).HasDatabaseName("IX_Suppressions_Tenant_Phone")
+                .HasFilter("[Type] = 1");
 
             entity.HasOne(s => s.Tenant)
                 .WithMany()
@@ -562,6 +577,149 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(c => c.Status)
                 .HasConversion<string>()
                 .HasMaxLength(20);
+        });
+
+        // SmsMessages
+        builder.Entity<SmsMessages>(entity =>
+        {
+            entity.ToTable("SmsMessages");
+            entity.Property(m => m.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
+            entity.HasIndex(m => new { m.TenantId, m.RequestedAtUtc }).HasDatabaseName("IX_SmsMessages_Tenant_Time");
+            entity.HasIndex(m => m.AwsMessageId).HasDatabaseName("IX_SmsMessages_AwsMessageId");
+            entity.HasIndex(m => new { m.Status, m.ScheduledAtUtc }).HasDatabaseName("IX_SmsMessages_Scheduled")
+                .HasFilter("[Status] = 4");
+
+            entity.HasOne(m => m.Tenant)
+                .WithMany()
+                .HasForeignKey(m => m.TenantId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(m => m.PhoneNumber)
+                .WithMany()
+                .HasForeignKey(m => m.PhoneNumberId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(m => m.Template)
+                .WithMany()
+                .HasForeignKey(m => m.TemplateId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // SmsEvents
+        builder.Entity<SmsEvents>(entity =>
+        {
+            entity.ToTable("SmsEvents");
+            entity.HasIndex(e => new { e.TenantId, e.OccurredAtUtc }).HasDatabaseName("IX_SmsEvents_Tenant_Time");
+            entity.HasIndex(e => e.SmsMessageId).HasDatabaseName("IX_SmsEvents_MessageId");
+
+            entity.HasOne(e => e.SmsMessage)
+                .WithMany()
+                .HasForeignKey(e => e.SmsMessageId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(e => e.Tenant)
+                .WithMany()
+                .HasForeignKey(e => e.TenantId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // SmsPhoneNumbers
+        builder.Entity<SmsPhoneNumbers>(entity =>
+        {
+            entity.ToTable("SmsPhoneNumbers");
+            entity.Property(p => p.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
+            entity.HasIndex(p => p.PhoneNumber).IsUnique().HasDatabaseName("UQ_SmsPhoneNumbers_Number");
+            entity.HasIndex(p => new { p.TenantId, p.IsDefault }).HasDatabaseName("IX_SmsPhoneNumbers_TenantDefault");
+
+            entity.HasOne(p => p.Tenant)
+                .WithMany()
+                .HasForeignKey(p => p.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // SmsTemplates
+        builder.Entity<SmsTemplates>(entity =>
+        {
+            entity.ToTable("SmsTemplates");
+            entity.Property(t => t.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
+            entity.HasIndex(t => new { t.TenantId, t.Name }).IsUnique().HasDatabaseName("UQ_SmsTemplates_TenantName");
+
+            entity.HasOne(t => t.Tenant)
+                .WithMany()
+                .HasForeignKey(t => t.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // PushCredentials
+        builder.Entity<Email.Shared.Models.PushCredentials>(entity =>
+        {
+            entity.ToTable("PushCredentials");
+            entity.Property(c => c.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
+            entity.HasIndex(c => new { c.TenantId, c.IsDefault }).HasDatabaseName("IX_PushCredentials_TenantDefault");
+            entity.HasIndex(c => new { c.TenantId, c.Name }).IsUnique().HasDatabaseName("UQ_PushCredentials_TenantName");
+            entity.HasIndex(c => c.AwsApplicationArn).HasDatabaseName("IX_PushCredentials_AwsArn");
+        });
+
+        // PushDeviceTokens
+        builder.Entity<Email.Shared.Models.PushDeviceTokens>(entity =>
+        {
+            entity.ToTable("PushDeviceTokens");
+            entity.Property(d => d.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
+            entity.HasIndex(d => new { d.CredentialId, d.Token }).IsUnique().HasDatabaseName("UQ_PushDeviceTokens_CredentialToken");
+            entity.HasIndex(d => new { d.TenantId, d.ExternalUserId }).HasDatabaseName("IX_PushDeviceTokens_TenantUser");
+            entity.HasIndex(d => d.AwsEndpointArn).HasDatabaseName("IX_PushDeviceTokens_AwsArn");
+
+            entity.HasOne(d => d.Credential)
+                .WithMany()
+                .HasForeignKey(d => d.CredentialId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // PushMessages
+        builder.Entity<Email.Shared.Models.PushMessages>(entity =>
+        {
+            entity.ToTable("PushMessages");
+            entity.Property(m => m.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
+            entity.HasIndex(m => new { m.TenantId, m.RequestedAtUtc }).HasDatabaseName("IX_PushMessages_Tenant_Time");
+            entity.HasIndex(m => new { m.Status, m.ScheduledAtUtc }).HasDatabaseName("IX_PushMessages_Scheduled")
+                .HasFilter("[Status] = 4");
+            entity.HasIndex(m => m.AwsMessageId).HasDatabaseName("IX_PushMessages_AwsMessageId");
+
+            entity.HasOne(m => m.Credential)
+                .WithMany()
+                .HasForeignKey(m => m.CredentialId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(m => m.DeviceToken)
+                .WithMany()
+                .HasForeignKey(m => m.DeviceTokenId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(m => m.Template)
+                .WithMany()
+                .HasForeignKey(m => m.TemplateId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // PushTemplates
+        builder.Entity<Email.Shared.Models.PushTemplates>(entity =>
+        {
+            entity.ToTable("PushTemplates");
+            entity.Property(t => t.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
+            entity.HasIndex(t => new { t.TenantId, t.Name }).IsUnique().HasDatabaseName("UQ_PushTemplates_TenantName");
+        });
+
+        // PushEvents
+        builder.Entity<Email.Shared.Models.PushEvents>(entity =>
+        {
+            entity.ToTable("PushEvents");
+            entity.HasIndex(e => new { e.TenantId, e.OccurredAtUtc }).HasDatabaseName("IX_PushEvents_Tenant_Time");
+            entity.HasIndex(e => e.PushMessageId).HasDatabaseName("IX_PushEvents_MessageId");
+
+            entity.HasOne(e => e.PushMessage)
+                .WithMany()
+                .HasForeignKey(e => e.PushMessageId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
     }
 }

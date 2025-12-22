@@ -301,4 +301,198 @@ public class UsageTrackingService : IUsageTrackingService
 
         return newPeriod;
     }
+
+    public async Task RecordSmsSendAsync(
+        Guid tenantId,
+        int smsCount,
+        int segmentCount,
+        string source,
+        CancellationToken ct = default)
+    {
+        var period = await GetOrCreateCurrentPeriodAsync(tenantId, ct);
+
+        // Atomically increment SMS usage
+        await _context.UsagePeriods
+            .Where(p => p.Id == period.Id)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.SmsSent, p => p.SmsSent + smsCount)
+                .SetProperty(p => p.SmsSegmentsSent, p => p.SmsSegmentsSent + segmentCount)
+                .SetProperty(p => p.OverageSms, p =>
+                    p.SmsSent + smsCount > p.IncludedSmsLimit
+                        ? (p.SmsSent + smsCount) - p.IncludedSmsLimit
+                        : 0), ct);
+
+        _logger.LogDebug(
+            "Recorded {Count} SMS ({Segments} segments) for tenant {TenantId} from {Source}",
+            smsCount, segmentCount, tenantId, source);
+    }
+
+    public async Task<UsageLimitCheckResult> CheckSmsLimitAsync(
+        Guid tenantId,
+        int requestedCount,
+        CancellationToken ct = default)
+    {
+        var subscription = await _context.TenantSubscriptions
+            .Include(s => s.BillingPlan)
+            .Include(s => s.Tenant)
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId, ct);
+
+        // No subscription = no SMS access (SMS requires a paid plan)
+        if (subscription == null)
+        {
+            return new UsageLimitCheckResult
+            {
+                Allowed = false,
+                DenialReason = "SMS requires a paid subscription. Please subscribe to a plan."
+            };
+        }
+
+        // Check subscription status
+        if (subscription.Status is SubscriptionStatus.Canceled or SubscriptionStatus.Unpaid)
+        {
+            return new UsageLimitCheckResult
+            {
+                Allowed = false,
+                DenialReason = "SMS requires an active subscription."
+            };
+        }
+
+        // Check if sending is disabled
+        if (subscription.Tenant?.SendingDisabledAt != null)
+        {
+            return new UsageLimitCheckResult
+            {
+                Allowed = false,
+                DenialReason = subscription.Tenant.SendingDisabledReason ?? "Sending is disabled"
+            };
+        }
+
+        var period = await GetOrCreateCurrentPeriodAsync(tenantId, ct);
+        var currentUsage = period.SmsSent;
+        var includedLimit = period.IncludedSmsLimit;
+
+        // Check if plan allows SMS overage
+        if (!subscription.BillingPlan?.AllowsSmsOverage == true)
+        {
+            if (currentUsage + requestedCount > includedLimit)
+            {
+                return new UsageLimitCheckResult
+                {
+                    Allowed = false,
+                    CurrentUsage = currentUsage,
+                    IncludedLimit = includedLimit,
+                    RemainingIncluded = Math.Max(0, includedLimit - currentUsage),
+                    DenialReason = $"SMS limit of {includedLimit:N0} reached. Please upgrade to continue sending."
+                };
+            }
+        }
+
+        // Plans with overage allowed
+        var isOverage = currentUsage + requestedCount > includedLimit;
+
+        return new UsageLimitCheckResult
+        {
+            Allowed = true,
+            IsOverage = isOverage,
+            CurrentUsage = currentUsage,
+            IncludedLimit = includedLimit,
+            RemainingIncluded = Math.Max(0, includedLimit - currentUsage)
+        };
+    }
+
+    public async Task RecordPushSendAsync(
+        Guid tenantId,
+        int pushCount,
+        string source,
+        CancellationToken ct = default)
+    {
+        var period = await GetOrCreateCurrentPeriodAsync(tenantId, ct);
+
+        // Atomically increment push usage
+        await _context.UsagePeriods
+            .Where(p => p.Id == period.Id)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.PushSent, p => p.PushSent + pushCount)
+                .SetProperty(p => p.OveragePush, p =>
+                    p.PushSent + pushCount > p.IncludedPushLimit
+                        ? (p.PushSent + pushCount) - p.IncludedPushLimit
+                        : 0), ct);
+
+        _logger.LogDebug(
+            "Recorded {Count} push notification(s) for tenant {TenantId} from {Source}",
+            pushCount, tenantId, source);
+    }
+
+    public async Task<UsageLimitCheckResult> CheckPushLimitAsync(
+        Guid tenantId,
+        int requestedCount,
+        CancellationToken ct = default)
+    {
+        var subscription = await _context.TenantSubscriptions
+            .Include(s => s.BillingPlan)
+            .Include(s => s.Tenant)
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId, ct);
+
+        // No subscription = no push access (push requires a paid plan)
+        if (subscription == null)
+        {
+            return new UsageLimitCheckResult
+            {
+                Allowed = false,
+                DenialReason = "Push notifications require a paid subscription. Please subscribe to a plan."
+            };
+        }
+
+        // Check subscription status
+        if (subscription.Status is SubscriptionStatus.Canceled or SubscriptionStatus.Unpaid)
+        {
+            return new UsageLimitCheckResult
+            {
+                Allowed = false,
+                DenialReason = "Push notifications require an active subscription."
+            };
+        }
+
+        // Check if sending is disabled
+        if (subscription.Tenant?.SendingDisabledAt != null)
+        {
+            return new UsageLimitCheckResult
+            {
+                Allowed = false,
+                DenialReason = subscription.Tenant.SendingDisabledReason ?? "Sending is disabled"
+            };
+        }
+
+        var period = await GetOrCreateCurrentPeriodAsync(tenantId, ct);
+        var currentUsage = period.PushSent;
+        var includedLimit = period.IncludedPushLimit;
+
+        // Check if plan allows push overage
+        if (!subscription.BillingPlan?.AllowsPushOverage == true)
+        {
+            if (currentUsage + requestedCount > includedLimit)
+            {
+                return new UsageLimitCheckResult
+                {
+                    Allowed = false,
+                    CurrentUsage = currentUsage,
+                    IncludedLimit = includedLimit,
+                    RemainingIncluded = Math.Max(0, includedLimit - currentUsage),
+                    DenialReason = $"Push notification limit of {includedLimit:N0} reached. Please upgrade to continue sending."
+                };
+            }
+        }
+
+        // Plans with overage allowed
+        var isOverage = currentUsage + requestedCount > includedLimit;
+
+        return new UsageLimitCheckResult
+        {
+            Allowed = true,
+            IsOverage = isOverage,
+            CurrentUsage = currentUsage,
+            IncludedLimit = includedLimit,
+            RemainingIncluded = Math.Max(0, includedLimit - currentUsage)
+        };
+    }
 }
