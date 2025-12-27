@@ -16,7 +16,16 @@ jobs:
       contents: read #This is required for actions/checkout
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Email.Server
+        uses: actions/checkout@v4
+        with:
+          path: Email.Server
+
+      - name: Checkout Email.Shared
+        uses: actions/checkout@v4
+        with:
+          repository: cade25wilson/Email.Shared
+          path: Email.Shared
 
       - name: Set up .NET Core
         uses: actions/setup-dotnet@v4
@@ -25,9 +34,11 @@ jobs:
 
       - name: Build with dotnet
         run: dotnet build --configuration Release
+        working-directory: Email.Server
 
       - name: dotnet publish
         run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        working-directory: Email.Server
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
