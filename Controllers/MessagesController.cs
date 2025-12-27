@@ -1,3 +1,4 @@
+using Email.Server.Attributes;
 using Email.Server.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,6 +8,7 @@ namespace Email.Server.Controllers;
 [ApiController]
 [Route("api/v1/[controller]")]
 [Authorize(AuthenticationSchemes = "ApiKey,Bearer")]
+[FeatureDisabled("Email messages")]
 public class MessagesController(IMessageService messageService, ILogger<MessagesController> logger) : ControllerBase
 {
     private readonly IMessageService _messageService = messageService;

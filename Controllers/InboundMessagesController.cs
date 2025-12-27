@@ -1,3 +1,4 @@
+using Email.Server.Attributes;
 using Email.Server.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,6 +8,7 @@ namespace Email.Server.Controllers;
 [ApiController]
 [Route("api/v1/inbound")]
 [Authorize(AuthenticationSchemes = "ApiKey,Bearer")]
+[FeatureDisabled("Inbound email")]
 public class InboundMessagesController(
     IInboundEmailService inboundEmailService,
     ILogger<InboundMessagesController> logger) : ControllerBase

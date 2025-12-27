@@ -1,3 +1,4 @@
+using Email.Server.Attributes;
 using Email.Server.DTOs.Requests;
 using Email.Server.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -8,6 +9,7 @@ namespace Email.Server.Controllers;
 [ApiController]
 [Route("api/v1/[controller]")]
 [Authorize(AuthenticationSchemes = "ApiKey,Bearer")]
+[FeatureDisabled("Domain management")]
 public class DomainsController(IDomainManagementService domainService, ILogger<DomainsController> logger) : ControllerBase
 {
     private readonly IDomainManagementService _domainService = domainService;
