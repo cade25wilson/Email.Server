@@ -66,6 +66,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<SmsEvents> SmsEvents { get; set; }
     public DbSet<SmsPhoneNumbers> SmsPhoneNumbers { get; set; }
     public DbSet<SmsTemplates> SmsTemplates { get; set; }
+    public DbSet<SmsPools> SmsPools { get; set; }
 
     // Push Notifications
     public DbSet<Email.Shared.Models.PushCredentials> PushCredentials { get; set; }
@@ -630,6 +631,26 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(p => p.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
             entity.HasIndex(p => p.PhoneNumber).IsUnique().HasDatabaseName("UQ_SmsPhoneNumbers_Number");
             entity.HasIndex(p => new { p.TenantId, p.IsDefault }).HasDatabaseName("IX_SmsPhoneNumbers_TenantDefault");
+            entity.HasIndex(p => p.PoolId).HasDatabaseName("IX_SmsPhoneNumbers_PoolId");
+
+            entity.HasOne(p => p.Tenant)
+                .WithMany()
+                .HasForeignKey(p => p.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(p => p.Pool)
+                .WithMany(pool => pool.PhoneNumbers)
+                .HasForeignKey(p => p.PoolId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // SmsPools
+        builder.Entity<SmsPools>(entity =>
+        {
+            entity.ToTable("SmsPools");
+            entity.Property(p => p.Id).HasDefaultValueSql("NEWSEQUENTIALID()");
+            entity.HasIndex(p => p.TenantId).IsUnique().HasDatabaseName("UQ_SmsPools_Tenant");
+            entity.HasIndex(p => p.AwsPoolId).HasDatabaseName("IX_SmsPools_AwsPoolId");
 
             entity.HasOne(p => p.Tenant)
                 .WithMany()

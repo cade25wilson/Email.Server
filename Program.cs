@@ -278,8 +278,9 @@ try
         return new AmazonPinpointSMSVoiceV2Client(config);
     });
 
-    // SMS Services (uses SNS for transactional SMS)
+    // SMS Services (uses Pinpoint pools for tenant isolation, SNS fallback for shared routes)
     builder.Services.AddScoped<ISmsClientService, AwsSmsClientService>();
+    builder.Services.AddScoped<ISmsPoolService, SmsPoolService>();
     builder.Services.AddScoped<ISmsService, SmsService>();
     builder.Services.AddScoped<ISmsTemplateService, SmsTemplateService>();
     builder.Services.AddScoped<ISmsPhoneNumberService, SmsPhoneNumberService>();

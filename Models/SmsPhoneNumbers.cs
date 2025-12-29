@@ -39,6 +39,13 @@ public class SmsPhoneNumbers
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// The SMS pool this number belongs to (for failover/load distribution)
+    /// </summary>
+    [ForeignKey("Pool")]
+    public Guid? PoolId { get; set; }
+
     // Navigation properties
     public Tenants? Tenant { get; set; }
+    public SmsPools? Pool { get; set; }
 }

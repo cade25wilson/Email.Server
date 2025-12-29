@@ -8,14 +8,15 @@ using Microsoft.EntityFrameworkCore;
 namespace Email.Server.Services.Implementations;
 
 /// <summary>
-/// SMS service using AWS SNS for transactional SMS.
-/// Uses shared routes (no dedicated phone numbers required).
+/// SMS service supporting both AWS SNS (shared routes) and Pinpoint pools (tenant-isolated).
+/// Automatically uses tenant's pool if provisioned, otherwise falls back to SNS.
 /// </summary>
 public class SmsService : ISmsService
 {
     private readonly ApplicationDbContext _context;
     private readonly ITenantContextService _tenantContext;
     private readonly ISmsClientService _smsClient;
+    private readonly ISmsPoolService _poolService;
     private readonly IUsageTrackingService _usageTracking;
     private readonly ISmsTemplateService _templateService;
     private readonly ILogger<SmsService> _logger;
@@ -24,6 +25,7 @@ public class SmsService : ISmsService
         ApplicationDbContext context,
         ITenantContextService tenantContext,
         ISmsClientService smsClient,
+        ISmsPoolService poolService,
         IUsageTrackingService usageTracking,
         ISmsTemplateService templateService,
         ILogger<SmsService> logger)
@@ -31,6 +33,7 @@ public class SmsService : ISmsService
         _context = context;
         _tenantContext = tenantContext;
         _smsClient = smsClient;
+        _poolService = poolService;
         _usageTracking = usageTracking;
         _templateService = templateService;
         _logger = logger;
@@ -76,12 +79,17 @@ public class SmsService : ISmsService
         // Determine if this is a scheduled send
         var isScheduled = request.ScheduledAtUtc.HasValue && request.ScheduledAtUtc.Value > DateTime.UtcNow;
 
-        // Create message entity (no phone number ID needed for SNS)
+        // Get tenant's pool if available (for tenant-isolated sending)
+        var pool = await _poolService.GetPoolAsync(cancellationToken);
+        var hasPool = pool?.AwsPoolArn != null;
+        var fromNumber = hasPool ? pool!.PhoneNumbers.FirstOrDefault()?.PhoneNumber ?? "Pool" : "SNS";
+
+        // Create message entity
         var message = new SmsMessages
         {
             TenantId = tenantId,
-            PhoneNumberId = null, // SNS uses shared routes
-            FromNumber = "SNS", // Placeholder - SNS handles the from number
+            PhoneNumberId = hasPool ? pool!.PhoneNumbers.FirstOrDefault()?.Id : null,
+            FromNumber = fromNumber,
             ToNumber = request.To,
             Body = body,
             TemplateId = request.TemplateId,
@@ -113,10 +121,22 @@ public class SmsService : ISmsService
             };
         }
 
-        // Send via AWS SNS
+        // Send via AWS (pool if available, otherwise SNS shared routes)
         try
         {
-            var result = await _smsClient.SendSmsAsync(request.To, body, true, cancellationToken);
+            SmsSendResult result;
+            if (hasPool)
+            {
+                // Use tenant's pool - AWS will pick a number from the pool
+                result = await _smsClient.SendSmsViaPoolAsync(pool!.AwsPoolArn!, request.To, body, true, cancellationToken);
+                _logger.LogDebug("Sending SMS via pool {PoolArn}", pool.AwsPoolArn);
+            }
+            else
+            {
+                // Fallback to SNS shared routes
+                result = await _smsClient.SendSmsAsync(request.To, body, true, cancellationToken);
+                _logger.LogDebug("Sending SMS via SNS shared routes (no pool configured)");
+            }
 
             if (result.Success)
             {
@@ -124,8 +144,8 @@ public class SmsService : ISmsService
                 message.Status = 1; // Sent
                 message.SentAtUtc = DateTime.UtcNow;
 
-                _logger.LogInformation("SMS sent successfully. MessageId: {MessageId}, AwsMessageId: {AwsMessageId}",
-                    message.Id, result.MessageId);
+                _logger.LogInformation("SMS sent successfully. MessageId: {MessageId}, AwsMessageId: {AwsMessageId}, ViaPool: {ViaPool}",
+                    message.Id, result.MessageId, hasPool);
 
                 // Record usage for billing
                 await _usageTracking.RecordSmsSendAsync(tenantId, 1, segmentCount, "API", cancellationToken);
@@ -208,10 +228,24 @@ public class SmsService : ISmsService
             };
         }
 
-        // Send via AWS SNS
+        // Get tenant's pool if available
+        var pool = await _context.SmsPools
+            .Include(p => p.PhoneNumbers)
+            .FirstOrDefaultAsync(p => p.TenantId == message.TenantId && p.IsActive, cancellationToken);
+        var hasPool = pool?.AwsPoolArn != null;
+
+        // Send via AWS (pool if available, otherwise SNS shared routes)
         try
         {
-            var result = await _smsClient.SendSmsAsync(message.ToNumber, message.Body, true, cancellationToken);
+            SmsSendResult result;
+            if (hasPool)
+            {
+                result = await _smsClient.SendSmsViaPoolAsync(pool!.AwsPoolArn!, message.ToNumber, message.Body, true, cancellationToken);
+            }
+            else
+            {
+                result = await _smsClient.SendSmsAsync(message.ToNumber, message.Body, true, cancellationToken);
+            }
 
             if (result.Success)
             {
@@ -219,8 +253,8 @@ public class SmsService : ISmsService
                 message.Status = 1; // Sent
                 message.SentAtUtc = DateTime.UtcNow;
 
-                _logger.LogInformation("Scheduled SMS sent successfully. MessageId: {MessageId}, AwsMessageId: {AwsMessageId}",
-                    message.Id, result.MessageId);
+                _logger.LogInformation("Scheduled SMS sent successfully. MessageId: {MessageId}, AwsMessageId: {AwsMessageId}, ViaPool: {ViaPool}",
+                    message.Id, result.MessageId, hasPool);
 
                 // Record usage for billing
                 await _usageTracking.RecordSmsSendAsync(message.TenantId, 1, message.SegmentCount, "Scheduled", cancellationToken);

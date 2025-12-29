@@ -14,17 +14,20 @@ public class SmsPhoneNumberService : ISmsPhoneNumberService
     private readonly ApplicationDbContext _context;
     private readonly ITenantContextService _tenantContext;
     private readonly IAmazonPinpointSMSVoiceV2 _pinpointClient;
+    private readonly ISmsPoolService _poolService;
     private readonly ILogger<SmsPhoneNumberService> _logger;
 
     public SmsPhoneNumberService(
         ApplicationDbContext context,
         ITenantContextService tenantContext,
         IAmazonPinpointSMSVoiceV2 pinpointClient,
+        ISmsPoolService poolService,
         ILogger<SmsPhoneNumberService> logger)
     {
         _context = context;
         _tenantContext = tenantContext;
         _pinpointClient = pinpointClient;
+        _poolService = poolService;
         _logger = logger;
     }
 
@@ -159,6 +162,9 @@ public class SmsPhoneNumberService : ISmsPhoneNumberService
             // Check if this is the first phone number (make it default)
             var isFirstNumber = existingCount == 0;
 
+            // Get or create tenant's pool
+            var pool = await _poolService.GetOrCreatePoolAsync(cancellationToken);
+
             // Create phone number record
             var phoneNumber = new SmsPhoneNumbers
             {
@@ -171,15 +177,19 @@ public class SmsPhoneNumberService : ISmsPhoneNumberService
                 IsDefault = isFirstNumber,
                 IsActive = true,
                 ProvisionedAtUtc = DateTime.UtcNow,
-                CreatedAtUtc = DateTime.UtcNow
+                CreatedAtUtc = DateTime.UtcNow,
+                PoolId = pool.Id
             };
 
             _context.SmsPhoneNumbers.Add(phoneNumber);
             await _context.SaveChangesAsync(cancellationToken);
 
+            // Add number to AWS pool (creates pool in AWS if first number)
+            await _poolService.AddNumberToPoolAsync(pool, response.PhoneNumberArn, cancellationToken);
+
             _logger.LogInformation(
-                "Provisioned phone number {PhoneNumber} (ARN: {Arn}) for tenant {TenantId}",
-                response.PhoneNumber, response.PhoneNumberArn, tenantId);
+                "Provisioned phone number {PhoneNumber} (ARN: {Arn}) for tenant {TenantId} in pool {PoolId}",
+                response.PhoneNumber, response.PhoneNumberArn, tenantId, pool.Id);
 
             return MapToResponse(phoneNumber);
         }
@@ -210,6 +220,7 @@ public class SmsPhoneNumberService : ISmsPhoneNumberService
         var tenantId = _tenantContext.GetTenantId();
 
         var phoneNumber = await _context.SmsPhoneNumbers
+            .Include(p => p.Pool)
             .FirstOrDefaultAsync(p => p.Id == id && p.TenantId == tenantId, cancellationToken);
 
         if (phoneNumber == null)
@@ -228,6 +239,12 @@ public class SmsPhoneNumberService : ISmsPhoneNumberService
 
         try
         {
+            // Remove from pool first (before AWS release)
+            if (phoneNumber.Pool != null && !string.IsNullOrEmpty(phoneNumber.PhoneNumberArn))
+            {
+                await _poolService.RemoveNumberFromPoolAsync(phoneNumber.Pool, phoneNumber.PhoneNumberArn, cancellationToken);
+            }
+
             // Release phone number in AWS
             if (!string.IsNullOrEmpty(phoneNumber.PhoneNumberArn))
             {
