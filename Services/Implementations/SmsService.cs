@@ -81,7 +81,14 @@ public class SmsService : ISmsService
 
         // Get tenant's pool if available (for tenant-isolated sending)
         var pool = await _poolService.GetPoolAsync(cancellationToken);
-        var hasPool = pool?.AwsPoolArn != null;
+
+        // Ensure pool is set up in AWS (lazy initialization)
+        var hasPool = false;
+        if (pool != null)
+        {
+            hasPool = await _poolService.EnsurePoolSetupAsync(pool, cancellationToken);
+        }
+
         var fromNumber = hasPool ? pool!.PhoneNumbers.FirstOrDefault()?.PhoneNumber ?? "Pool" : "SNS";
 
         // Create message entity
@@ -232,7 +239,13 @@ public class SmsService : ISmsService
         var pool = await _context.SmsPools
             .Include(p => p.PhoneNumbers)
             .FirstOrDefaultAsync(p => p.TenantId == message.TenantId && p.IsActive, cancellationToken);
-        var hasPool = pool?.AwsPoolArn != null;
+
+        // Ensure pool is set up in AWS (lazy initialization)
+        var hasPool = false;
+        if (pool != null)
+        {
+            hasPool = await _poolService.EnsurePoolSetupAsync(pool, cancellationToken);
+        }
 
         // Send via AWS (pool if available, otherwise SNS shared routes)
         try

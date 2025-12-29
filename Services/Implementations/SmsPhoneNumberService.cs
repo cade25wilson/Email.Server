@@ -184,12 +184,13 @@ public class SmsPhoneNumberService : ISmsPhoneNumberService
             _context.SmsPhoneNumbers.Add(phoneNumber);
             await _context.SaveChangesAsync(cancellationToken);
 
-            // Add number to AWS pool (creates pool in AWS if first number)
-            await _poolService.AddNumberToPoolAsync(pool, response.PhoneNumberArn, cancellationToken);
+            // Note: We don't add the number to the AWS pool here because the phone number
+            // may not be immediately active after provisioning. The pool will be set up
+            // lazily when the first SMS is sent via EnsurePoolSetupAsync.
 
             _logger.LogInformation(
-                "Provisioned phone number {PhoneNumber} (ARN: {Arn}) for tenant {TenantId} in pool {PoolId}",
-                response.PhoneNumber, response.PhoneNumberArn, tenantId, pool.Id);
+                "Provisioned phone number {PhoneNumber} (ARN: {Arn}) for tenant {TenantId}. Pool setup will occur when number is active.",
+                response.PhoneNumber, response.PhoneNumberArn, tenantId);
 
             return MapToResponse(phoneNumber);
         }

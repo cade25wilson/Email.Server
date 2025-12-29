@@ -77,6 +77,64 @@ public class SmsPoolService : ISmsPoolService
         return pool;
     }
 
+    public async Task<bool> EnsurePoolSetupAsync(SmsPools pool, CancellationToken cancellationToken = default)
+    {
+        // If pool already has an AWS Pool ID, it's set up
+        if (!string.IsNullOrEmpty(pool.AwsPoolArn))
+        {
+            return true;
+        }
+
+        // Get all active phone numbers with ARNs for this pool
+        var phoneNumbers = await _context.SmsPhoneNumbers
+            .Where(p => p.PoolId == pool.Id && p.IsActive && p.PhoneNumberArn != null)
+            .ToListAsync(cancellationToken);
+
+        if (phoneNumbers.Count == 0)
+        {
+            _logger.LogWarning("No active phone numbers available for pool {PoolId}", pool.Id);
+            return false;
+        }
+
+        // Try to create the pool with the first available number
+        foreach (var phoneNumber in phoneNumbers)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(pool.AwsPoolId))
+                {
+                    // Create pool with this number
+                    await CreateAwsPoolAsync(pool, phoneNumber.PhoneNumberArn!, cancellationToken);
+                    _logger.LogInformation(
+                        "Created AWS pool {PoolId} with phone number {PhoneNumber}",
+                        pool.AwsPoolId, phoneNumber.PhoneNumber);
+                }
+                else
+                {
+                    // Pool exists, add this number to it
+                    await AddNumberToPoolAsync(pool, phoneNumber.PhoneNumberArn!, cancellationToken);
+                }
+            }
+            catch (ConflictException ex) when (ex.Message.Contains("RESOURCE_NOT_ACTIVE"))
+            {
+                // Phone number not active yet - skip it and try the next one
+                _logger.LogWarning(
+                    "Phone number {PhoneNumber} not yet active, skipping pool assignment",
+                    phoneNumber.PhoneNumber);
+                continue;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to add phone number {PhoneNumber} to pool, will retry later",
+                    phoneNumber.PhoneNumber);
+                continue;
+            }
+        }
+
+        return !string.IsNullOrEmpty(pool.AwsPoolArn);
+    }
+
     public async Task AddNumberToPoolAsync(SmsPools pool, string phoneNumberArn, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(phoneNumberArn))
